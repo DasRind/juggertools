@@ -1,0 +1,27 @@
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "rootDir": ".",
+    "sourceMap": true,
+    "declaration": false,
+    "moduleResolution": "node",
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "importHelpers": true,
+    "target": "es2015",
+    "module": "esnext",
+    "lib": ["es2020", "dom", "DOM.Iterable"],
+    "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@juggertools/core-domain": ["core-domain/src/index.ts"],
+      "@juggertools/core-engine": ["core-engine/src/index.ts"],
+      "@juggertools/core-geometry": ["core-geometry/src/index.ts"],
+      "@juggertools/export-screenshot": ["export-screenshot/src/index.ts"],
+      "@juggertools/tools-draw": ["tools-draw/src/index.ts"],
+      "@juggertools/ui-angular": ["ui-angular/src/index.ts"]
+    }
+  },
+  "exclude": ["node_modules", "tmp"]
+}

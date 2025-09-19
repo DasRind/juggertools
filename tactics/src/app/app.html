@@ -1,0 +1,104 @@
+<div class="layout">
+  <section class="panel panel--team panel--left">
+    <header>
+      <h2>{{ leftTeam.name }}</h2>
+      <p class="panel__meta">Teamfarbe: <span [style.color]="leftTeam.color">{{ leftTeam.color }}</span></p>
+    </header>
+    <ul class="player-list">
+      <li
+        *ngFor="let player of leftPlayers()"
+        draggable="true"
+        (dragstart)="onDragStart($event, player, leftTeam)"
+        [class.player--active]="playerTokenId(player) === selectedTokenId()"
+        [class.player--hover]="playerTokenId(player) === hoveredTokenId()"
+      >
+        <span class="player-number">{{ player.number ?? '—' }}</span>
+        <span class="player-name">{{ player.name }}</span>
+        <span class="player-role">{{ player.role }}</span>
+      </li>
+    </ul>
+  </section>
+
+  <section class="field-container" (dragover)="allowDrop($event)" (drop)="handleDrop($event)">
+    <jugger-field
+      class="field-component"
+      [scene]="scene()"
+      (engineReady)="handleEngineReady($event)"
+      (pointerDown)="handlePointer($event)"
+      (pointerMove)="handlePointer($event)"
+      (pointerUp)="handlePointer($event)"
+      (pointerCancel)="handlePointer($event)"
+    ></jugger-field>
+  </section>
+
+  <section class="panel panel--team panel--right">
+    <header>
+      <h2>{{ rightTeam.name }}</h2>
+      <p class="panel__meta">Teamfarbe: <span [style.color]="rightTeam.color">{{ rightTeam.color }}</span></p>
+    </header>
+    <ul class="player-list">
+      <li
+        *ngFor="let player of rightPlayers()"
+        draggable="true"
+        (dragstart)="onDragStart($event, player, rightTeam)"
+        [class.player--active]="playerTokenId(player) === selectedTokenId()"
+        [class.player--hover]="playerTokenId(player) === hoveredTokenId()"
+      >
+        <span class="player-number">{{ player.number ?? '—' }}</span>
+        <span class="player-name">{{ player.name }}</span>
+        <span class="player-role">{{ player.role }}</span>
+      </li>
+    </ul>
+
+    <section class="tools">
+      <h3>Tools</h3>
+      <div class="tools-grid">
+        <button
+          *ngFor="let tool of tools"
+          type="button"
+          class="tool-button"
+          [class.tool-button--active]="tool.id === selectedTool()"
+          (click)="selectTool(tool.id)"
+        >
+          {{ tool.label }}
+        </button>
+      </div>
+
+      <div class="history-indicator">
+        <div class="history-indicator__row">
+          <span>Undo</span>
+          <div class="history-indicator__bar">
+            <div class="history-indicator__fill" [style.width.%]="undoFill()"></div>
+          </div>
+          <span>{{ undoDepth() }}/{{ historyCapacity }}</span>
+        </div>
+        <div class="history-indicator__row">
+          <span>Redo</span>
+          <div class="history-indicator__bar">
+            <div class="history-indicator__fill history-indicator__fill--redo" [style.width.%]="redoFill()"></div>
+          </div>
+          <span>{{ redoDepth() }}/{{ historyCapacity }}</span>
+        </div>
+      </div>
+
+      <div class="tools-actions">
+        <button type="button" (click)="undo()" [disabled]="!canUndo()">Undo ({{ undoDepth() }})</button>
+        <button type="button" (click)="redo()" [disabled]="!canRedo()">Redo ({{ redoDepth() }})</button>
+        <button type="button" class="export-button" (click)="exportScreenshot()">Export PNG</button>
+      </div>
+
+      <p class="tools__pointer" *ngIf="lastPointerEvent() as pointer">
+        Letztes Event: {{ pointer }}
+      </p>
+    </section>
+  </section>
+</div>
+
+<div class="toast" *ngIf="toast() as toast" [class.toast--warning]="toast.intent === 'warning'" [class.toast--error]="toast.intent === 'error'">
+  <span>{{ toast.message }}</span>
+  <div class="toast__actions" *ngIf="toast.actions?.length">
+    <button type="button" *ngFor="let action of toast.actions" (click)="onToastAction(toast, action)">
+      {{ action.label }}
+    </button>
+  </div>
+</div>

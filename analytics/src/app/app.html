@@ -1,0 +1,53 @@
+<div class="layout">
+  <header class="header">
+    <h1>Jugger Analytics — Recorder Session</h1>
+    <p class="subtitle">Schnellstart für Aufnahmesessions mit Autosave</p>
+    <div class="actions">
+      <button type="button" (click)="addSampleGame()">Sample-Spiel erfassen</button>
+      <button type="button" (click)="clearAll()" [disabled]="gameCount() === 0">Alles löschen</button>
+    </div>
+  </header>
+
+  <section class="summary">
+    <article>
+      <h2>Gespeicherte Spiele</h2>
+      <p class="summary__value">{{ gameCount() }}</p>
+    </article>
+    <article>
+      <h2>Zuletzt gespeichert</h2>
+      <p class="summary__value">{{ lastSavedAt() | date:'short' }}</p>
+    </article>
+  </section>
+
+  <section class="games" *ngIf="games().length; else empty">
+    <h2>Session Spiele</h2>
+    <ul>
+      <li *ngFor="let game of games()">
+        <div class="game__meta">
+          <h3>{{ game.left.name }} vs {{ game.right.name }}</h3>
+          <small>ID: {{ game.id }}</small>
+        </div>
+        <div class="game__details">
+          <span>{{ game.players.length }} Spieler</span>
+          <span>Version {{ game.meta.version }}</span>
+        </div>
+        <button type="button" (click)="removeGame(game)">Entfernen</button>
+      </li>
+    </ul>
+  </section>
+  <ng-template #empty>
+    <div class="empty">
+      <h2>Keine Spiele vorhanden</h2>
+      <p>Erfasse ein Sample-Spiel oder lade eine bestehende Sitzung wieder.</p>
+    </div>
+  </ng-template>
+</div>
+
+<div class="toast" *ngIf="toast() as toast" [class.toast--warning]="toast.intent === 'warning'" [class.toast--error]="toast.intent === 'error'">
+  <span>{{ toast.message }}</span>
+  <div class="toast__actions" *ngIf="toast.actions?.length">
+    <button type="button" *ngFor="let action of toast.actions" (click)="onToastAction(toast, action)">
+      {{ action.label }}
+    </button>
+  </div>
+</div>
