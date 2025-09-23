@@ -128,9 +128,9 @@ describe('App', () => {
     expect(headings).toEqual(expect.arrayContaining(['Red Ravens', 'Azure Titans']));
 
     const toolButtons = Array.from(compiled.querySelectorAll('.tool-button')).map((el) => el.textContent?.trim());
-    expect(toolButtons).toEqual(expect.arrayContaining(['Select', 'Pen', 'Arrow', 'Cone', 'Eraser']));
+    expect(toolButtons).toEqual(expect.arrayContaining(['Select', 'Line', 'Pen', 'Arrow', 'Cone', 'Eraser']));
 
-    const actionButtons = Array.from(compiled.querySelectorAll('.tools-actions button')).map((el) => el.textContent?.trim());
+    const actionButtons = Array.from(compiled.querySelectorAll('.field-area__actions button')).map((el) => el.textContent?.trim());
     expect(actionButtons.some((text) => (text ?? '').includes('Undo'))).toBe(true);
     expect(actionButtons.some((text) => (text ?? '').includes('Redo'))).toBe(true);
     expect(actionButtons.some((text) => (text ?? '').includes('Export PNG'))).toBe(true);

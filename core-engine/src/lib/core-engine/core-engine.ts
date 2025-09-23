@@ -1,4 +1,5 @@
-import type { SceneSnapshot } from '@juggertools/core-domain';
+import type { SceneSnapshot, Team } from '@juggertools/core-domain';
+import { createSceneSnapshot, nowISO } from '@juggertools/core-domain';
 import {
   composeTransforms,
   IDENTITY_MATRIX,
@@ -27,6 +28,17 @@ export interface RenderState {
   devicePixelRatio: number;
   viewport: EngineViewport;
   timestamp: number;
+}
+
+export interface CanvasFormLine {
+  points: PointLike[];
+  stroke?: string;
+  width?: number;
+  dash?: number[];
+  opacity?: number;
+  closePath?: boolean;
+  fill?: string;
+  coordinateSpace?: 'absolute' | 'relative';
 }
 
 export type LayerRenderer = (ctx: CanvasRenderingContext2D, state: RenderState) => void;
@@ -68,6 +80,7 @@ export class CanvasEngine {
   private dpr: number;
   private rafHandle: number | null = null;
   private destroyed = false;
+  private formLines: CanvasFormLine[] = [];
 
   constructor(canvas: HTMLCanvasElement, options: CanvasEngineOptions = {}) {
     const ctx = canvas.getContext('2d');
@@ -89,6 +102,9 @@ export class CanvasEngine {
     }
 
     this.resize(this.viewport.width, this.viewport.height);
+    if (!this.scene) {
+      this.initializeDefaultScene();
+    }
     this.attachPointerListeners();
   }
 
@@ -118,13 +134,35 @@ export class CanvasEngine {
   }
 
   setTransform(matrix: Matrix2D): void {
-    this.fieldToCanvas = matrix;
-    this.canvasToField = matrixInvert(matrix);
+    const scaled = composeTransforms([matrixScale(this.dpr), matrix]);
+    this.fieldToCanvas = scaled;
+    this.canvasToField = matrixInvert(scaled);
     this.scheduleDraw();
   }
 
   getTransform(): Matrix2D {
     return this.fieldToCanvas;
+  }
+
+  getViewport(): EngineViewport {
+    return { ...this.viewport };
+  }
+
+  drawForm(lines: readonly CanvasFormLine[]): void {
+    this.formLines = lines.map((line) => ({
+      ...line,
+      points: line.points.map((point) => ({ ...point })),
+      dash: line.dash ? [...line.dash] : undefined,
+    }));
+    this.scheduleDraw();
+  }
+
+  clearForm(): void {
+    if (this.formLines.length === 0) {
+      return;
+    }
+    this.formLines = [];
+    this.scheduleDraw();
   }
 
   resize(width: number, height: number): void {
@@ -134,7 +172,11 @@ export class CanvasEngine {
     this.canvas.width = Math.max(1, Math.floor(width * this.dpr));
     this.canvas.height = Math.max(1, Math.floor(height * this.dpr));
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    this.scheduleDraw();
+    if (this.scene) {
+      this.computeFitTransform();
+    } else {
+      this.scheduleDraw();
+    }
   }
 
   registerLayerRenderer(layer: LayerId, renderer: LayerRenderer): () => void {
@@ -171,6 +213,8 @@ export class CanvasEngine {
       timestamp,
     };
 
+    this.renderFormLines(state);
+
     for (const layer of this.layerOrder) {
       const renderers = this.layerRenderers.get(layer);
       if (!renderers || renderers.size === 0) {
@@ -192,6 +236,101 @@ export class CanvasEngine {
     }
 
     this.ctx.restore();
+  }
+
+  private renderFormLines(_state: RenderState): void {
+    if (this.formLines.length === 0) {
+      return;
+    }
+
+    this.ctx.save();
+    this.ctx.setTransform(
+      this.fieldToCanvas.a,
+      this.fieldToCanvas.b,
+      this.fieldToCanvas.c,
+      this.fieldToCanvas.d,
+      this.fieldToCanvas.tx,
+      this.fieldToCanvas.ty,
+    );
+
+    this.formLines.forEach((line) => {
+      if (line.points.length === 0) {
+        return;
+      }
+
+      this.ctx.save();
+      if (line.opacity !== undefined) {
+        this.ctx.globalAlpha = line.opacity;
+      }
+      if (line.stroke) {
+        this.ctx.strokeStyle = line.stroke;
+      }
+
+      const points = line.coordinateSpace === 'relative'
+        ? line.points.map((point) => ({
+            x: (point.x / 100) * this.viewport.width,
+            y: (point.y / 100) * this.viewport.height,
+          }))
+        : line.points;
+
+      const width = line.width !== undefined
+        ? line.coordinateSpace === 'relative'
+          ? (line.width / 100) * this.viewport.height
+          : line.width
+        : undefined;
+      if (width !== undefined) {
+        this.ctx.lineWidth = width;
+      }
+
+      const dash = line.dash
+        ? line.coordinateSpace === 'relative'
+          ? line.dash.map((value) => (value / 100) * this.viewport.height)
+          : line.dash
+        : undefined;
+      this.ctx.setLineDash(dash ?? []);
+      this.ctx.beginPath();
+      points.forEach((point, index) => {
+        if (index === 0) {
+          this.ctx.moveTo(point.x, point.y);
+        } else {
+          this.ctx.lineTo(point.x, point.y);
+        }
+      });
+      if (line.closePath) {
+        this.ctx.closePath();
+      }
+      const hasFill = typeof line.fill === 'string';
+      if (hasFill) {
+        this.ctx.fillStyle = line.fill!;
+        this.ctx.fill();
+      }
+      if (line.stroke !== undefined || !hasFill) {
+        this.ctx.stroke();
+      }
+      this.ctx.restore();
+    });
+
+    this.ctx.restore();
+  }
+
+  private initializeDefaultScene(): void {
+    const defaultTeam = (id: string, name: string, color: string): Team => ({
+      id,
+      name,
+      color,
+      players: [],
+    });
+    const scene = createSceneSnapshot({
+      id: `engine-${nowISO()}`,
+      field: {
+        width: this.viewport.width,
+        height: this.viewport.height,
+        lines: [],
+      },
+      leftTeam: defaultTeam('engine-left', 'Left', '#f87171'),
+      rightTeam: defaultTeam('engine-right', 'Right', '#60a5fa'),
+    });
+    this.setScene(scene);
   }
 
   scheduleDraw(): void {

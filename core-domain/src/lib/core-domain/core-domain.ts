@@ -49,6 +49,10 @@ export interface Token {
   y: number;
   rotation?: number;
   label?: string;
+  color?: string;
+  shape?: 'circle' | 'rectangle';
+  width?: number;
+  height?: number;
 }
 
 export interface DrawingMeta {
@@ -77,6 +81,15 @@ export interface ArrowDrawing {
   meta?: DrawingMeta;
 }
 
+export interface LineDrawing {
+  id: ID;
+  kind: 'line';
+  points: Array<{ x: number; y: number }>;
+  stroke: string;
+  width: number;
+  meta?: DrawingMeta;
+}
+
 export interface ConeDrawing {
   id: ID;
   kind: 'cone';
@@ -86,7 +99,19 @@ export interface ConeDrawing {
   meta?: DrawingMeta;
 }
 
-export type Drawing = PenDrawing | ArrowDrawing | ConeDrawing;
+export interface ImageDrawing {
+  id: ID;
+  kind: 'image';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  src: string;
+  opacity?: number;
+  meta?: DrawingMeta;
+}
+
+export type Drawing = PenDrawing | ArrowDrawing | LineDrawing | ImageDrawing | ConeDrawing;
 
 export interface Scene {
   id: ID;
