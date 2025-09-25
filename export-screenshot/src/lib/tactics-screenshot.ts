@@ -8,7 +8,7 @@ const JUGG_CORNER_RATIO = 0.28;
 const JUGG_ID = 'jugg-token';
 const JUGG_DEFAULT_COLOR = '#facc15';
 const JUGG_STROKE_COLOR = '#111827';
-const FIELD_SURFACE_COLOR = '#c2dcd2';
+const FIELD_SURFACE_COLOR = '#2ac88bff';
 interface FieldLayoutPoint {
   x: number;
   y: number;
@@ -93,6 +93,8 @@ interface CanvasFieldStyle {
   background?: FieldBackgroundSpec;
   overlays?: CanvasFieldOverlay[];
   boundary?: CanvasFieldBoundary;
+  surfaceColor?: string;
+  lineColor?: string;
 }
 
 export interface TacticsScreenshotOptions {
@@ -108,6 +110,7 @@ export interface TacticsScreenshotOptions {
   fieldStyle?: CanvasFieldStyle;
   fieldLayoutIsNormalized?: boolean;
   includeTeamPanels?: boolean;
+  rotateQuarterTurn?: boolean;
 }
 
 export async function composeTacticsScreenshot(
@@ -126,6 +129,7 @@ export async function composeTacticsScreenshot(
     fieldStyle,
     fieldLayoutIsNormalized = false,
     includeTeamPanels = true,
+    rotateQuarterTurn = false,
   } = options;
 
   const dpr = Math.max(1, devicePixelRatio);
@@ -139,42 +143,72 @@ export async function composeTacticsScreenshot(
   ctx.scale(dpr, dpr);
   paintBackground(ctx, width, height, background);
 
-  const showPanels = includeTeamPanels && Boolean(leftTeam && rightTeam);
-  const panelWidth = Math.max(240, width * 0.2);
-  const leftPanelWidth = showPanels ? panelWidth : 0;
-  const rightPanelWidth = showPanels ? panelWidth : 0;
-  const fieldArea = {
-    x: padding + leftPanelWidth,
-    y: padding,
-    width: width - leftPanelWidth - rightPanelWidth - padding * 2,
-    height: height - padding * 2,
+  const renderComposition = (
+    targetCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+    targetWidth: number,
+    targetHeight: number
+  ) => {
+    const showPanels = includeTeamPanels && Boolean(leftTeam && rightTeam);
+    const panelWidth = Math.max(240, targetWidth * 0.2);
+    const leftPanelWidth = showPanels ? panelWidth : 0;
+    const rightPanelWidth = showPanels ? panelWidth : 0;
+    const availableWidth = Math.max(
+      1,
+      targetWidth - leftPanelWidth - rightPanelWidth - padding * 2
+    );
+    const availableHeight = Math.max(1, targetHeight - padding * 2);
+    const fieldArea = {
+      x: padding + leftPanelWidth,
+      y: padding,
+      width: availableWidth,
+      height: availableHeight,
+    };
+
+    if (showPanels) {
+      paintTeamPanel(targetCtx, {
+        x: padding,
+        y: padding,
+        width: leftPanelWidth - padding * 0.5,
+        height: targetHeight - padding * 2,
+        team: leftTeam!,
+        align: 'left',
+      });
+
+      paintTeamPanel(targetCtx, {
+        x: targetWidth - padding - (rightPanelWidth - padding * 0.5),
+        y: padding,
+        width: rightPanelWidth - padding * 0.5,
+        height: targetHeight - padding * 2,
+        team: rightTeam!,
+        align: 'right',
+      });
+
+      if (fieldArea.width > 0) {
+        const desiredInset = fieldArea.width * 0.015;
+        const inset = Math.min(fieldArea.width / 6, Math.max(12, desiredInset));
+        if (inset > 0 && inset * 2 < fieldArea.width) {
+          fieldArea.x += inset;
+          fieldArea.width -= inset * 2;
+        }
+      }
+    }
+
+    paintScene(targetCtx, fieldArea, scene, {
+      fieldLayout,
+      fieldStyle,
+      fieldLayoutIsNormalized,
+    });
   };
 
-  if (showPanels) {
-    paintTeamPanel(ctx, {
-      x: padding,
-      y: padding,
-      width: leftPanelWidth - padding * 0.5,
-      height: height - padding * 2,
-      team: leftTeam!,
-      align: 'left',
-    });
-
-    paintTeamPanel(ctx, {
-      x: width - padding - (rightPanelWidth - padding * 0.5),
-      y: padding,
-      width: rightPanelWidth - padding * 0.5,
-      height: height - padding * 2,
-      team: rightTeam!,
-      align: 'right',
-    });
+  if (rotateQuarterTurn) {
+    ctx.save();
+    ctx.translate(width, 0);
+    ctx.rotate(Math.PI / 2);
+    renderComposition(ctx, height, width);
+    ctx.restore();
+  } else {
+    renderComposition(ctx, width, height);
   }
-
-  paintScene(ctx, fieldArea, scene, {
-    fieldLayout,
-    fieldStyle,
-    fieldLayoutIsNormalized,
-  });
 
   return await canvasToBlob(canvas);
 }
@@ -391,23 +425,75 @@ function paintFieldWithLayout(
   const height = dimensions.height;
 
   ctx.save();
-  paintFieldBackground(ctx, width, height, style?.background);
+  ctx.clearRect(0, 0, width, height);
+
   let boundaryId: string | undefined;
   let boundary: FieldLayoutLineElement | undefined;
+  let shouldPaintRectBoundary = false;
+
   if (layout) {
     boundary = layout.elements.find(
       (element): element is FieldLayoutLineElement =>
         element.kind === 'line' && Boolean(element.closePath)
     );
-    fillLayoutBoundary(ctx, boundary, height);
     boundaryId = boundary?.id;
   }
-  paintFieldOverlays(ctx, style?.overlays);
-  if (layout) {
-    paintLayoutElements(ctx, layout.elements, boundaryId);
+
+  if (boundary && style?.background) {
+    paintBackgroundWithinBoundary(
+      ctx,
+      width,
+      height,
+      style.background,
+      boundary
+    );
+  } else {
+    paintFieldBackground(ctx, width, height, style?.background);
   }
-  paintFieldBoundary(ctx, width, height, style?.boundary);
+
+  if (layout) {
+    fillLayoutBoundary(ctx, boundary, style, {
+      skipFill: Boolean(boundary && style?.background),
+    });
+  }
+
+  if (!boundary && style?.boundary) {
+    shouldPaintRectBoundary = true;
+  }
+
+  if (style?.overlays?.length) {
+    if (boundary) {
+      withBoundaryClip(ctx, boundary, () =>
+        paintFieldOverlays(ctx, style.overlays)
+      );
+    } else {
+      paintFieldOverlays(ctx, style.overlays);
+    }
+  }
+
+  if (layout) {
+    paintLayoutElements(ctx, layout.elements, boundaryId, style);
+  }
+
+  paintFieldBoundary(
+    ctx,
+    width,
+    height,
+    shouldPaintRectBoundary ? style?.boundary : undefined
+  );
   ctx.restore();
+}
+
+function paintBackgroundWithinBoundary(
+  ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+  width: number,
+  height: number,
+  background: FieldBackgroundSpec,
+  boundary: FieldLayoutLineElement
+): void {
+  withBoundaryClip(ctx, boundary, () =>
+    paintFieldBackground(ctx, width, height, background)
+  );
 }
 
 function paintFieldBackground(
@@ -479,10 +565,38 @@ function paintFieldOverlays(
   });
 }
 
+function withBoundaryClip(
+  ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+  boundary: FieldLayoutLineElement,
+  render: () => void
+): void {
+  ctx.save();
+  ctx.beginPath();
+  traceBoundaryPath(ctx, boundary);
+  ctx.closePath();
+  ctx.clip();
+  render();
+  ctx.restore();
+}
+
+function traceBoundaryPath(
+  ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+  boundary: FieldLayoutLineElement
+): void {
+  boundary.points.forEach((point, index) => {
+    if (index === 0) {
+      ctx.moveTo(point.x, point.y);
+      return;
+    }
+    ctx.lineTo(point.x, point.y);
+  });
+}
+
 function paintLayoutElements(
   ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
   elements: FieldLayoutElement[],
-  skipBoundaryId?: string
+  skipBoundaryId?: string,
+  style?: CanvasFieldStyle
 ): void {
   elements.forEach((element) => {
     if (
@@ -498,7 +612,8 @@ function paintLayoutElements(
       if (element.opacity !== undefined) {
         ctx.globalAlpha = element.opacity;
       }
-      ctx.strokeStyle = element.stroke ?? 'rgba(248, 250, 252, 0.65)';
+      ctx.strokeStyle =
+        style?.lineColor ?? element.stroke ?? 'rgba(248, 250, 252, 0.65)';
       ctx.lineWidth = element.strokeWidth ?? 0.35;
       ctx.setLineDash(element.dash ?? []);
       ctx.beginPath();
@@ -525,7 +640,8 @@ function paintLayoutElements(
     if (element.opacity !== undefined) {
       ctx.globalAlpha = element.opacity;
     }
-    ctx.strokeStyle = element.stroke ?? 'rgba(248, 250, 252, 0.65)';
+    ctx.strokeStyle =
+      style?.lineColor ?? element.stroke ?? 'rgba(248, 250, 252, 0.65)';
     ctx.lineWidth = element.strokeWidth ?? 0.35;
     ctx.setLineDash(element.dash ?? []);
     ctx.beginPath();
@@ -538,27 +654,28 @@ function paintLayoutElements(
 function fillLayoutBoundary(
   ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
   boundary: FieldLayoutLineElement | undefined,
-  height: number
+  style: CanvasFieldStyle | undefined,
+  options?: { skipFill?: boolean }
 ): void {
   if (!boundary || boundary.points.length < 3) {
     return;
   }
   ctx.save();
-  ctx.fillStyle = FIELD_SURFACE_COLOR;
+  const surfaceColor = style?.surfaceColor ?? FIELD_SURFACE_COLOR;
+  const skipFill = options?.skipFill ?? false;
   ctx.beginPath();
-  boundary.points.forEach((point, index) => {
-    if (index === 0) {
-      ctx.moveTo(point.x, point.y);
-    } else {
-      ctx.lineTo(point.x, point.y);
-    }
-  });
+  traceBoundaryPath(ctx, boundary);
   ctx.closePath();
-  ctx.fill();
+  if (!skipFill) {
+    ctx.fillStyle = surfaceColor;
+    ctx.fill();
+  }
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
-  ctx.lineWidth = 6;
-  ctx.strokeStyle = '#000000';
+  const strokeColor = style?.boundary?.stroke ?? boundary.stroke ?? '#000000';
+  const strokeWidth = style?.boundary?.width ?? boundary.strokeWidth ?? 6;
+  ctx.lineWidth = strokeWidth;
+  ctx.strokeStyle = strokeColor;
   ctx.stroke();
   ctx.restore();
 }
@@ -855,5 +972,7 @@ function cloneFieldStyle(
           dash: style.boundary.dash ? [...style.boundary.dash] : undefined,
         }
       : undefined,
+    surfaceColor: style.surfaceColor,
+    lineColor: style.lineColor,
   };
 }

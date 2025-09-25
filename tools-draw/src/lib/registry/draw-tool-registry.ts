@@ -1013,14 +1013,6 @@ class LineTool implements DrawTool {
           ],
         },
       }));
-      this.selectedId = drawingId;
-      runtime.emit({
-        context,
-        data: {
-          kind: 'select',
-          target: { type: 'drawing', id: drawingId },
-        },
-      });
       runtime.emit({ context, data: { kind: 'line-start', drawingId } });
       return;
     }
@@ -1116,7 +1108,9 @@ class LineTool implements DrawTool {
   ): void {
     if (session.mode === 'create') {
       this.updateActiveLine(session, point, runtime, context);
+      let removed = false;
       if (context.type === 'cancel') {
+        removed = true;
         this.removeLine(session.drawingId, runtime);
         if (this.selectedId === session.drawingId) {
           this.selectedId = undefined;
@@ -1125,12 +1119,23 @@ class LineTool implements DrawTool {
       } else {
         const start = session.anchor;
         if (distance(start, point) < 0.35) {
+          removed = true;
           this.removeLine(session.drawingId, runtime);
           if (this.selectedId === session.drawingId) {
             this.selectedId = undefined;
             runtime.emit({ context, data: { kind: 'select', target: undefined } });
           }
         }
+      }
+      if (!removed) {
+        this.selectedId = session.drawingId;
+        runtime.emit({
+          context,
+          data: {
+            kind: 'select',
+            target: { type: 'drawing', id: session.drawingId },
+          },
+        });
       }
       runtime.emit({ context, data: { kind: 'line-end', drawingId: session.drawingId } });
       return;
@@ -1492,14 +1497,6 @@ class ArrowTool implements DrawTool {
           ],
         },
       }));
-      this.selectedId = drawingId;
-      runtime.emit({
-        context,
-        data: {
-          kind: 'select',
-          target: { type: 'drawing', id: drawingId },
-        },
-      });
       runtime.emit({ context, data: { kind: 'arrow-start', drawingId } });
       return;
     }
@@ -1562,6 +1559,16 @@ class ArrowTool implements DrawTool {
     if (context.type === 'up' || context.type === 'cancel') {
       const state = this.active.get(pointerId);
       if (state) {
+        if (context.type !== 'cancel') {
+          this.selectedId = state.drawingId;
+          runtime.emit({
+            context,
+            data: {
+              kind: 'select',
+              target: { type: 'drawing', id: state.drawingId },
+            },
+          });
+        }
         runtime.emit({
           context,
           data: { kind: 'arrow-end', drawingId: state.drawingId },

@@ -54,6 +54,98 @@ import {
   FIELD_UNIT_HEIGHT,
 } from './field-layout';
 import { composeTacticsScreenshot } from '@juggertools/export-screenshot';
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore - gif-encoder-2 ships without TypeScript types
+import GIFEncoder from 'gif-encoder-2';
+
+try {
+  Function(
+    'if (typeof remaining === "undefined") { remaining = 0; }' +
+      'if (typeof curPixel === "undefined") { curPixel = 0; }' +
+      'if (typeof n_bits === "undefined") { n_bits = 0; }'
+  )();
+} catch {
+  /* no-op */
+}
+
+const globalBuffer = globalThis as Record<string, unknown>;
+if (typeof globalBuffer['Buffer'] === 'undefined') {
+  globalBuffer['Buffer'] = {
+    from(input: ArrayBufferLike | ArrayLike<number> | string) {
+      if (typeof input === 'string') {
+        return new TextEncoder().encode(input);
+      }
+      if (input instanceof ArrayBuffer) {
+        return new Uint8Array(input);
+      }
+      if (ArrayBuffer.isView(input)) {
+        const view = input as ArrayBufferView;
+        return new Uint8Array(
+          view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength)
+        );
+      }
+      if (
+        Array.isArray(input) ||
+        typeof (input as { length?: number }).length === 'number'
+      ) {
+        return Uint8Array.from(Array.from(input as ArrayLike<number>));
+      }
+      throw new Error('Unsupported Buffer.from input in browser shim');
+    },
+  } as unknown as typeof Buffer;
+}
+
+interface SceneDeckEntry {
+  id: string;
+  label: string;
+  createdAt: string;
+  updatedAt: string;
+  snapshot: SceneSnapshot;
+  previewDataUrl: string | null;
+}
+
+interface SceneHistoryState {
+  undo: SceneSnapshot[];
+  redo: SceneSnapshot[];
+}
+
+interface LegacyPersistedSession {
+  scene: SceneSnapshot;
+  fieldLayout: FieldLayoutDefinition;
+  undoStack: SceneSnapshot[];
+  redoStack: SceneSnapshot[];
+  savedAt: string;
+  isFieldFlipped?: boolean;
+  isFieldRotated?: boolean;
+}
+
+type AnimationFormatId = 'webm' | 'mp4' | 'gif';
+
+interface AnimationFormatOption {
+  id: AnimationFormatId;
+  label: string;
+  extension: string;
+  mimeCandidates: readonly string[];
+  transparentHint?: string;
+}
+
+interface AnimationTimingOption {
+  id: 'fast' | 'medium' | 'slow';
+  label: string;
+  durationMs: number;
+}
+
+interface AnimationExportProgress {
+  phase: 'render' | 'encode';
+  current: number;
+  total: number;
+  message: string;
+}
+
+interface SilentAudioTrackHandle {
+  track: MediaStreamTrack;
+  dispose: () => Promise<void> | void;
+}
 
 interface DragPayload {
   playerId: string;
@@ -61,12 +153,13 @@ interface DragPayload {
 }
 
 interface PersistedSession {
-  scene: SceneSnapshot;
+  scenes: SceneDeckEntry[];
+  activeSceneId: string;
   fieldLayout: FieldLayoutDefinition;
-  undoStack: SceneSnapshot[];
-  redoStack: SceneSnapshot[];
+  history: Record<string, SceneHistoryState>;
   savedAt: string;
   isFieldFlipped?: boolean;
+  isFieldRotated?: boolean;
 }
 
 const HISTORY_CAPACITY = 30;
@@ -74,9 +167,9 @@ const DEFAULT_TOAST_DURATION_MS = 4000;
 const STORAGE_KEY = 'juggertools:tactics:session';
 const VISUAL_SCALE = 5.4;
 const TOKEN_RADIUS = 3.4 * VISUAL_SCALE;
-const SELECTION_OUTLINE_EXTRA = 1.2 * VISUAL_SCALE;
-const SELECTED_OUTLINE_COLOR = 'rgba(34, 197, 94, 0.75)';
-const HOVER_OUTLINE_COLOR = 'rgba(148, 163, 184, 0.8)';
+const SELECTION_OUTLINE_EXTRA = 1.0 * VISUAL_SCALE;
+const SELECTED_OUTLINE_COLOR = 'rgba(248, 208, 208, 1)';
+const HOVER_OUTLINE_COLOR = 'rgba(215, 186, 186, 0.8)';
 const JUGG_ID = 'jugg-token';
 const JUGG_TEAM_ID = 'neutral-jugg';
 const DEFAULT_JUGG_COLOR = '#facc15';
@@ -84,9 +177,19 @@ const DEFAULT_JUGG_STROKE = '#111827';
 const JUGG_WIDTH = 3.2 * VISUAL_SCALE;
 const JUGG_HEIGHT = 7.2 * VISUAL_SCALE;
 const JUGG_CORNER_RATIO = 0.28;
-const FIELD_SURFACE_COLOR = '#c2dcd2';
+const FIELD_SURFACE_COLOR = '#2ac88bff';
+const DEFAULT_FIELD_LINE_COLOR = '#f8fafc';
+const DEFAULT_FIELD_BOUNDARY_COLOR = '#000000';
+const DEFAULT_FIELD_LINE_ALPHA = 0.55;
 const EXPORT_PADDING = 0;
 const EXPORT_DEVICE_PIXEL_RATIO = 1;
+const SCENE_PREVIEW_WIDTH = 220;
+const SCENE_PREVIEW_HEIGHT = 124;
+const SCENE_PREVIEW_DEBOUNCE_MS = 180;
+const SCENE_ANIMATION_FRAME_DURATION_MS = 1200;
+const SCENE_ANIMATION_PRE_START_DELAY_MS = 160;
+const SCENE_ANIMATION_FRAME_RATE = 30;
+const THEME_STORAGE_KEY = 'juggertools:tactics:theme';
 
 function cloneFieldLayout(
   layout: FieldLayoutDefinition
@@ -140,6 +243,10 @@ interface ExportResolutionOption {
   selector: 'app-root',
   templateUrl: './app.html',
   styleUrl: './app.scss',
+  host: {
+    class: 'app-shell',
+    '[class.theme-dark]': 'isDarkMode()',
+  },
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CommonModule, JuggerFieldComponent],
 })
@@ -187,21 +294,33 @@ export class App implements OnDestroy {
     })
   );
 
+  private readonly sceneDeck = signal<SceneDeckEntry[]>([
+    this.createSceneDeckEntry(this.sceneSnapshot(), {
+      label: 'Szene 1',
+    }),
+  ]);
+
+  private readonly activeSceneId = signal<string>(
+    this.sceneSnapshot().scene.id
+  );
+
   private engine?: CanvasEngine;
   private readonly imageCache = new Map<
     string,
     { src: string; image: HTMLImageElement }
   >();
   private layerDisposers: Array<() => void> = [];
-  private readonly undoStack: SceneSnapshot[] = [];
-  private readonly redoStack: SceneSnapshot[] = [];
+  private readonly sceneHistories = new Map<string, SceneHistoryState>([
+    [this.sceneSnapshot().scene.id, { undo: [], redo: [] }],
+  ]);
+  private readonly pendingPreviewTimers = new Map<string, number>();
+  private sceneLabelCounter = 1;
   private isHistoryBatchActive = false;
   private pendingHistorySnapshot: SceneSnapshot | null = null;
   private pendingHistoryDirty = false;
   private hasDeferredPersist = false;
   private lastSelectionKey: string | null = null;
   private pendingSession: PersistedSession | null = null;
-
   readonly historyCapacity = HISTORY_CAPACITY;
   readonly undoDepth = signal(0);
   readonly redoDepth = signal(0);
@@ -214,6 +333,74 @@ export class App implements OnDestroy {
     () => Math.min(1, this.redoDepth() / this.historyCapacity) * 100
   );
 
+  readonly scenes = computed(() => this.sceneDeck());
+  readonly activeSceneIdValue = computed(() => this.activeSceneId());
+  readonly canExportAnimation = computed(() => this.sceneDeck().length > 0);
+  readonly isDarkMode = signal(this.readInitialTheme());
+  readonly themeToggleLabel = computed(() =>
+    this.isDarkMode() ? 'Helles Design' : 'Dunkles Design'
+  );
+
+  private readonly syncThemeEffect = effect(() => {
+    const dark = this.isDarkMode();
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.toggle('theme-dark', dark);
+      document.documentElement.classList.toggle('theme-light', !dark);
+    }
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem(THEME_STORAGE_KEY, dark ? 'dark' : 'light');
+      } catch {
+        /* ignore persistence issues */
+      }
+    }
+  });
+  readonly animationFormats: readonly AnimationFormatOption[] = [
+    {
+      id: 'webm',
+      label: 'WebM (VP9)',
+      extension: 'webm',
+      mimeCandidates: [
+        'video/webm;codecs=vp9',
+        'video/webm;codecs=vp8',
+        'video/webm',
+      ],
+      transparentHint:
+        'Transparenz wird mit VP9 unterstützt, Browser-Support variiert.',
+    },
+    {
+      id: 'mp4',
+      label: 'MP4 (H.264)',
+      extension: 'mp4',
+      mimeCandidates: [
+        'video/mp4;codecs="avc1.42E01E,mp4a.40.2"',
+        'video/mp4;codecs="avc1.4d401f,mp4a.40.2"',
+        'video/mp4',
+      ],
+      transparentHint:
+        'MP4 unterstützt keine Transparenz – Hintergrund wird opak. Export nutzt Baseline H.264, AAC und 30 FPS.',
+    },
+    {
+      id: 'gif',
+      label: 'GIF',
+      extension: 'gif',
+      mimeCandidates: ['image/gif'],
+      transparentHint:
+        'GIF erlaubt nur 1-bit Transparenz; feine Alpha-Effekte gehen verloren.',
+    },
+  ] as const;
+  readonly selectedAnimationFormat =
+    signal<AnimationFormatOption['id']>('webm');
+  readonly animationDurations: readonly AnimationTimingOption[] = [
+    { id: 'fast', label: '0,5 Sekunden', durationMs: 500 },
+    { id: 'medium', label: '1,0 Sekunde', durationMs: 1000 },
+    { id: 'slow', label: '2,0 Sekunden', durationMs: 2000 },
+  ] as const;
+  readonly selectedAnimationDuration =
+    signal<AnimationTimingOption['id']>('medium');
+  readonly isAnimationExporting = signal(false);
+  readonly animationProgress = signal<AnimationExportProgress | null>(null);
+
   readonly penColors = [
     '#f8fafc',
     '#ef4444',
@@ -224,7 +411,7 @@ export class App implements OnDestroy {
     '#6366f1',
     '#a855f7',
   ];
-  readonly selectedPenColor = signal<string>(this.penColors[0]);
+  readonly selectedPenColor = signal<string>(this.penColors[1]);
 
   readonly arrowColors = [
     '#facc15',
@@ -269,6 +456,11 @@ export class App implements OnDestroy {
   ] as const;
   readonly selectedEraserSize =
     signal<(typeof this.eraserSizes)[number]['id']>('medium');
+
+  readonly fieldSurfaceColor = signal<string>(FIELD_SURFACE_COLOR);
+  readonly fieldLineColor = signal<string>(DEFAULT_FIELD_LINE_COLOR);
+  readonly fieldBoundaryColor = signal<string>(DEFAULT_FIELD_BOUNDARY_COLOR);
+  readonly showFieldSettings = signal<boolean>(false);
 
   readonly hoveredTarget = signal<SelectTarget | null>(null);
   readonly selectedTarget = signal<SelectTarget | null>(null);
@@ -383,6 +575,25 @@ export class App implements OnDestroy {
     applySceneUpdate: this.applySceneUpdate,
   });
 
+  private readonly syncSceneDeckEffect = effect(() => {
+    const activeId = this.activeSceneId();
+    const snapshot = this.sceneSnapshot();
+    this.sceneDeck.update((entries) => {
+      const index = entries.findIndex((entry) => entry.id === activeId);
+      if (index < 0) {
+        return entries;
+      }
+      const nextEntries = entries.slice();
+      nextEntries[index] = {
+        ...entries[index],
+        snapshot: this.cloneSnapshot(snapshot),
+        updatedAt: snapshot.scene.lastUpdatedAt ?? nowISO(),
+      };
+      return nextEntries;
+    });
+    this.scheduleScenePreview(activeId, snapshot);
+  });
+
   readonly tools = this.toolRegistry.listTools();
   readonly toolShortcuts = this.tools.map((tool, index) => ({
     ...tool,
@@ -393,6 +604,34 @@ export class App implements OnDestroy {
     cloneFieldLayout(JUGGER_FIELD_LAYOUT)
   );
   readonly isFieldFlipped = signal(false);
+  readonly isFieldRotated = signal(false);
+  readonly fieldAspectRatio = computed(() => {
+    const snapshot = this.scene();
+    const orientation = snapshot.scene.orientation ?? 'landscape';
+    let width =
+      orientation === 'portrait'
+        ? snapshot.scene.field.height
+        : snapshot.scene.field.width;
+    let height =
+      orientation === 'portrait'
+        ? snapshot.scene.field.width
+        : snapshot.scene.field.height;
+
+    if (!Number.isFinite(width) || width <= 0) {
+      width = 40;
+    }
+    if (!Number.isFinite(height) || height <= 0) {
+      height = 20;
+    }
+
+    if (this.isFieldRotated()) {
+      const nextWidth = height;
+      height = width;
+      width = nextWidth;
+    }
+
+    return `${width} / ${height}`;
+  });
   readonly lastPointerEvent = signal<string | null>(null);
   readonly eraserPreview = signal<{ x: number; y: number } | null>(null);
   readonly colorMenuContext = signal<
@@ -504,6 +743,12 @@ export class App implements OnDestroy {
   ngOnDestroy(): void {
     this.cleanupLayers();
     this.toolRegistry.attachEngine(undefined);
+    if (typeof window !== 'undefined') {
+      this.pendingPreviewTimers.forEach((handle) =>
+        window.clearTimeout(handle)
+      );
+    }
+    this.pendingPreviewTimers.clear();
   }
 
   selectTool(toolId: DrawToolId): void {
@@ -536,6 +781,72 @@ export class App implements OnDestroy {
     if (this.selectedTool() === 'arrow') {
       this.engine?.draw();
     }
+  }
+
+  addScene(): void {
+    const source = this.cloneSnapshot(this.sceneSnapshot());
+    const newId = this.createSceneId();
+    const timestamp = nowISO();
+    source.scene = {
+      ...source.scene,
+      id: newId,
+      lastUpdatedAt: timestamp,
+    };
+    const label = this.nextSceneLabel();
+    const entry = this.createSceneDeckEntry(source, {
+      idOverride: newId,
+      label,
+    });
+    this.sceneDeck.update((entries) => [...entries, entry]);
+    this.sceneHistories.set(newId, { undo: [], redo: [] });
+    this.activeSceneId.set(newId);
+    this.sceneSnapshot.set(source);
+    this.toolRegistry.updateScene(source);
+    this.engine?.setScene(source);
+    this.undoDepth.set(0);
+    this.redoDepth.set(0);
+    this.hoveredTarget.set(null);
+    this.selectedTarget.set(null);
+    this.activeDrawingHandle.set(null);
+    this.isDraggingToken.set(false);
+    this.isDraggingDrawing.set(false);
+    this.colorMenuContext.set(null);
+    this.scheduleScenePreview(newId, source);
+    this.persistState();
+  }
+
+  activateScene(sceneId: string): void {
+    if (sceneId === this.activeSceneId()) {
+      return;
+    }
+    const entry = this.sceneDeck().find(
+      (candidate) => candidate.id === sceneId
+    );
+    if (!entry) {
+      return;
+    }
+    this.activeSceneId.set(sceneId);
+    const snapshot = this.cloneSnapshot(entry.snapshot);
+    this.sceneSnapshot.set(snapshot);
+    this.toolRegistry.updateScene(snapshot);
+    this.engine?.setScene(snapshot);
+    const history = this.getActiveHistory();
+    this.undoDepth.set(history.undo.length);
+    this.redoDepth.set(history.redo.length);
+    this.hoveredTarget.set(null);
+    this.selectedTarget.set(null);
+    this.activeDrawingHandle.set(null);
+    this.isDraggingToken.set(false);
+    this.isDraggingDrawing.set(false);
+    this.colorMenuContext.set(null);
+    if (!entry.previewDataUrl) {
+      this.scheduleScenePreview(sceneId, snapshot);
+    }
+    this.persistState();
+  }
+
+  trackScene(_index: number, entry: SceneDeckEntry): string {
+    return entry.id;
   }
 
   selectEraserSize(sizeId: string): void {
@@ -690,6 +1001,7 @@ export class App implements OnDestroy {
           fieldLayout?: FieldLayoutDefinition;
           selectedTool?: DrawToolId;
           isFieldFlipped?: boolean;
+          isFieldRotated?: boolean;
         };
         if (!payload || typeof payload !== 'object' || !payload.scene) {
           throw new Error('Ungültiges JSON');
@@ -716,16 +1028,19 @@ export class App implements OnDestroy {
           this.isFieldFlipped.set(false);
         }
 
+        if (typeof payload.isFieldRotated === 'boolean') {
+          this.isFieldRotated.set(payload.isFieldRotated);
+        } else {
+          this.isFieldRotated.set(false);
+        }
+
         this.hoveredTarget.set(null);
         this.selectedTarget.set(null);
         this.activeDrawingHandle.set(null);
         this.isDraggingToken.set(false);
         this.isDraggingDrawing.set(false);
         this.colorMenuContext.set(null);
-        this.undoStack.length = 0;
-        this.redoStack.length = 0;
-        this.undoDepth.set(0);
-        this.redoDepth.set(0);
+        this.resetHistoryForScene(this.activeSceneId());
         this.persistState();
         this.toastService.show({
           message: 'JSON importiert ✅',
@@ -774,17 +1089,18 @@ export class App implements OnDestroy {
 
   undo(): void {
     this.commitHistoryBatch();
-    const previous = this.undoStack.pop();
+    const history = this.getActiveHistory();
+    const previous = history.undo.pop();
     if (!previous) {
       return;
     }
-    this.undoDepth.set(this.undoStack.length);
+    this.undoDepth.set(history.undo.length);
 
     const current = this.cloneSnapshot(this.sceneSnapshot());
-    this.redoStack.push(current);
-    this.trimHistory(this.redoStack);
+    history.redo.push(current);
+    this.trimHistory(history.redo);
     this.sceneSnapshot.set(previous);
-    this.redoDepth.set(this.redoStack.length);
+    this.redoDepth.set(history.redo.length);
     this.toolRegistry.updateScene(previous);
     this.isDraggingToken.set(false);
     this.isDraggingDrawing.set(false);
@@ -796,11 +1112,12 @@ export class App implements OnDestroy {
 
   redo(): void {
     this.commitHistoryBatch();
-    const next = this.redoStack.pop();
+    const history = this.getActiveHistory();
+    const next = history.redo.pop();
     if (!next) {
       return;
     }
-    this.redoDepth.set(this.redoStack.length);
+    this.redoDepth.set(history.redo.length);
 
     const current = this.cloneSnapshot(this.sceneSnapshot());
     this.pushUndo(current, { resetRedo: false });
@@ -824,8 +1141,47 @@ export class App implements OnDestroy {
     this.engine?.draw();
   }
 
+  toggleFieldSettings(): void {
+    this.showFieldSettings.update((value) => !value);
+  }
+
+  toggleTheme(): void {
+    this.isDarkMode.update((value) => !value);
+  }
+
+  updateFieldSurfaceColor(color: string): void {
+    const normalized = this.normalizeColor(color);
+    if (!normalized) {
+      return;
+    }
+    this.fieldSurfaceColor.set(normalized);
+    this.engine?.draw();
+  }
+
+  updateFieldLineColor(color: string): void {
+    const normalized = this.normalizeColor(color);
+    if (!normalized) {
+      return;
+    }
+    this.fieldLineColor.set(normalized);
+    this.engine?.draw();
+  }
+
+  updateFieldBoundaryColor(color: string): void {
+    const normalized = this.normalizeColor(color);
+    if (!normalized) {
+      return;
+    }
+    this.fieldBoundaryColor.set(normalized);
+    this.engine?.draw();
+  }
+
   toggleFieldFlip(): void {
     this.isFieldFlipped.update((value) => !value);
+  }
+
+  toggleFieldRotation(): void {
+    this.isFieldRotated.update((value) => !value);
   }
 
   setExportResolution(optionId: string): void {
@@ -839,6 +1195,32 @@ export class App implements OnDestroy {
       return;
     }
     this.selectedExportResolution.set(option.id);
+  }
+
+  setAnimationFormat(formatId: string): void {
+    if (formatId === this.selectedAnimationFormat()) {
+      return;
+    }
+    const option = this.animationFormats.find(
+      (candidate) => candidate.id === formatId
+    );
+    if (!option) {
+      return;
+    }
+    this.selectedAnimationFormat.set(option.id);
+  }
+
+  setAnimationDuration(durationId: string): void {
+    if (durationId === this.selectedAnimationDuration()) {
+      return;
+    }
+    const option = this.animationDurations.find(
+      (candidate) => candidate.id === durationId
+    );
+    if (!option) {
+      return;
+    }
+    this.selectedAnimationDuration.set(option.id);
   }
 
   spawnJugg(): void {
@@ -897,25 +1279,437 @@ export class App implements OnDestroy {
     this.engine?.draw();
   }
 
+  private async composeSceneBlob(
+    scene: SceneSnapshot,
+    resolution: ExportResolutionOption
+  ): Promise<{ blob: Blob; width: number; height: number }> {
+    const snapshot = this.cloneSnapshot(scene);
+    const layout = cloneFieldLayout(this.fieldLayout());
+    const surfaceColor = this.fieldSurfaceColor();
+    const lineStrokeColor = this.resolveLineStrokeColor();
+    const boundaryColor = this.fieldBoundaryColor();
+    const boundaryElement = layout.elements.find(
+      (element): element is FieldLayoutLineElement =>
+        element.kind === 'line' && Boolean(element.closePath)
+    );
+    const boundaryWidth = boundaryElement?.strokeWidth ?? 6;
+
+    layout.elements = layout.elements.map((element) => {
+      if (element.kind === 'line') {
+        const stroke = element.closePath ? boundaryColor : lineStrokeColor;
+        return { ...element, stroke };
+      }
+      if (element.kind === 'circle') {
+        return { ...element, stroke: lineStrokeColor };
+      }
+      return element;
+    });
+
+    const rotated = this.isFieldRotated();
+    const orientation = snapshot.scene.orientation ?? 'landscape';
+    let fieldWidth =
+      orientation === 'portrait'
+        ? snapshot.scene.field.height
+        : snapshot.scene.field.width;
+    let fieldHeight =
+      orientation === 'portrait'
+        ? snapshot.scene.field.width
+        : snapshot.scene.field.height;
+    if (rotated) {
+      const nextWidth = fieldHeight;
+      fieldHeight = fieldWidth;
+      fieldWidth = nextWidth;
+    }
+
+    const aspect = fieldWidth / fieldHeight;
+    const maxWidth = rotated ? resolution.height : resolution.width;
+    const maxHeight = rotated ? resolution.width : resolution.height;
+
+    let exportWidth = Math.round(maxWidth);
+    let exportHeight = Math.round(exportWidth / aspect);
+    if (exportHeight > maxHeight) {
+      exportHeight = Math.round(maxHeight);
+      exportWidth = Math.round(exportHeight * aspect);
+    }
+
+    const blob = await composeTacticsScreenshot({
+      scene: snapshot,
+      width: exportWidth,
+      height: exportHeight,
+      padding: EXPORT_PADDING,
+      background: 'transparent',
+      devicePixelRatio: EXPORT_DEVICE_PIXEL_RATIO,
+      fieldLayout: layout,
+      fieldStyle: {
+        background: { kind: 'solid', color: surfaceColor },
+        surfaceColor,
+        lineColor: lineStrokeColor,
+        boundary: {
+          stroke: boundaryColor,
+          width: boundaryWidth,
+        },
+      },
+      fieldLayoutIsNormalized: true,
+      includeTeamPanels: false,
+      rotateQuarterTurn: rotated,
+    });
+
+    return { blob, width: exportWidth, height: exportHeight };
+  }
+
+  private resolveSupportedMimeType(
+    candidates: readonly string[]
+  ): string | null {
+    if (!candidates.length) {
+      return null;
+    }
+    if (typeof MediaRecorder === 'undefined') {
+      return null;
+    }
+    if (typeof MediaRecorder.isTypeSupported !== 'function') {
+      return candidates[0] ?? null;
+    }
+    return (
+      candidates.find((candidate) =>
+        MediaRecorder.isTypeSupported(candidate)
+      ) ?? null
+    );
+  }
+
+  private async exportAnimationViaMediaRecorder(params: {
+    option: AnimationFormatOption;
+    mimeType: string;
+    scenes: SceneDeckEntry[];
+    frameDuration: number;
+    includeSilentAudio?: boolean;
+  }): Promise<void> {
+    const {
+      option,
+      mimeType,
+      scenes,
+      frameDuration,
+      includeSilentAudio = false,
+    } = params;
+    const resolution = this.resolveExportResolution(
+      this.selectedExportResolution()
+    );
+
+    const canvas = document.createElement('canvas');
+    canvas.style.position = 'fixed';
+    canvas.style.left = '-9999px';
+    canvas.style.top = '-9999px';
+    document.body.appendChild(canvas);
+    const ctx = canvas.getContext('2d', { alpha: true });
+    if (!ctx) {
+      canvas.remove();
+      this.toastService.show({
+        message: 'Canvas Kontext nicht verfügbar',
+        intent: 'error',
+        durationMs: DEFAULT_TOAST_DURATION_MS,
+      });
+      return;
+    }
+
+    const cleanupCanvas = () => {
+      canvas.remove();
+    };
+
+    let stream: MediaStream | null = null;
+    let recorder: MediaRecorder | null = null;
+    let recorderStopped: Promise<void> | null = null;
+    const chunks: Blob[] = [];
+    let audioHandle: SilentAudioTrackHandle | null = null;
+
+    let renderedScenes: Array<{ bitmap: ImageBitmap }> = [];
+    let canvasDims: { width: number; height: number } | null = null;
+    try {
+      for (let index = 0; index < scenes.length; index += 1) {
+        const render = await this.composeSceneBlob(
+          scenes[index].snapshot,
+          resolution
+        );
+        if (!canvasDims) {
+          canvasDims = { width: render.width, height: render.height };
+        }
+        const bitmap = await createImageBitmap(render.blob);
+        renderedScenes.push({ bitmap });
+        this.animationProgress.set({
+          phase: 'render',
+          current: index + 1,
+          total: scenes.length,
+          message: `Szene ${index + 1} vorbereitet`,
+        });
+      }
+
+      if (!canvasDims || renderedScenes.length === 0) {
+        throw new Error('Keine Szenen zum Export vorhanden');
+      }
+
+      canvas.width = canvasDims.width;
+      canvas.height = canvasDims.height;
+      const frameIntervalMs = 1000 / SCENE_ANIMATION_FRAME_RATE;
+
+      stream = canvas.captureStream(SCENE_ANIMATION_FRAME_RATE);
+      const canvasTrack = stream.getVideoTracks()[0] as MediaStreamTrack & {
+        requestFrame?: () => void;
+      };
+      if (includeSilentAudio) {
+        audioHandle = this.createSilentAudioTrack();
+        if (audioHandle?.track) {
+          stream.addTrack(audioHandle.track);
+        }
+      }
+      const recorderOptions: MediaRecorderOptions = {
+        mimeType,
+        videoBitsPerSecond: 4_000_000,
+        audioBitsPerSecond: includeSilentAudio ? 128_000 : undefined,
+      };
+      recorder = new MediaRecorder(stream, recorderOptions);
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      };
+
+      recorderStopped = new Promise<void>((resolve, reject) => {
+        recorder!.onstop = () => resolve();
+        recorder!.onerror = (event: Event & { error?: unknown }) => {
+          const error = event.error;
+          reject(error instanceof Error ? error : new Error('Recorder Fehler'));
+        };
+      });
+
+      recorder.start();
+      await this.delay(SCENE_ANIMATION_PRE_START_DELAY_MS);
+      const framesForScene = (duration: number) =>
+        Math.max(
+          1,
+          Math.round(Math.max(duration, frameIntervalMs) / frameIntervalMs)
+        );
+
+      for (let index = 0; index < renderedScenes.length; index += 1) {
+        const sceneFrame = renderedScenes[index];
+        this.animationProgress.set({
+          phase: 'render',
+          current: index + 1,
+          total: scenes.length,
+          message: `Szene ${index + 1} bereit`,
+        });
+
+        const durationForScene = frameDuration;
+        const frameCount = framesForScene(durationForScene);
+        let elapsedMs = 0;
+        for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(sceneFrame.bitmap, 0, 0, canvas.width, canvas.height);
+          if (canvasTrack?.requestFrame) {
+            try {
+              canvasTrack.requestFrame();
+            } catch {
+              /* ignore */
+            }
+          }
+
+          const targetElapsed = Math.min(
+            durationForScene,
+            Math.round((frameIndex + 1) * frameIntervalMs)
+          );
+          const waitMs = Math.max(1, targetElapsed - elapsedMs);
+          elapsedMs = targetElapsed;
+          await this.delay(waitMs);
+        }
+
+        this.animationProgress.set({
+          phase: 'render',
+          current: index + 1,
+          total: scenes.length,
+          message: `Szene ${index + 1} abgeschlossen`,
+        });
+      }
+
+      recorder.stop();
+      await recorderStopped;
+
+      if (!chunks.length) {
+        throw new Error('Keine Videodaten erstellt');
+      }
+
+      this.animationProgress.set({
+        phase: 'encode',
+        current: scenes.length,
+        total: scenes.length,
+        message: 'Video finalisieren …',
+      });
+
+      const animationBlob = new Blob(chunks, { type: mimeType });
+      this.triggerDownload(
+        animationBlob,
+        `${this.buildExportBasename(option)}.${option.extension}`
+      );
+
+      const baseMessage = `Animation exportiert (${option.label}) ✅`;
+      const message = option.transparentHint ? `${baseMessage}` : baseMessage;
+      this.toastService.show({
+        message,
+        intent: 'success',
+        durationMs: DEFAULT_TOAST_DURATION_MS,
+      });
+    } catch (error) {
+      console.error('Animation export failed', error);
+      this.toastService.show({
+        message: 'Animation Export fehlgeschlagen',
+        intent: 'error',
+        durationMs: DEFAULT_TOAST_DURATION_MS,
+      });
+    } finally {
+      if (recorder && recorder.state === 'recording') {
+        try {
+          recorder.stop();
+          if (recorderStopped) {
+            await recorderStopped.catch(() => undefined);
+          }
+        } catch (stopError) {
+          console.warn('Recorder konnte nicht gestoppt werden', stopError);
+        }
+      }
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+      }
+      if (audioHandle) {
+        try {
+          stream?.removeTrack(audioHandle.track);
+        } catch {
+          /* ignore */
+        }
+        await audioHandle.dispose();
+      }
+      cleanupCanvas();
+      renderedScenes.forEach((frame) => frame.bitmap.close());
+      renderedScenes = [];
+    }
+
+    return;
+  }
+
+  private async exportAnimationAsGif(params: {
+    option: AnimationFormatOption;
+    scenes: SceneDeckEntry[];
+    frameDuration: number;
+  }): Promise<void> {
+    const { option, scenes, frameDuration } = params;
+    const resolution = this.resolveExportResolution(
+      this.selectedExportResolution()
+    );
+
+    const renderedFrames: Array<{
+      imageData: ImageData;
+    }> = [];
+    let targetWidth = 0;
+    let targetHeight = 0;
+
+    for (let index = 0; index < scenes.length; index += 1) {
+      const scene = scenes[index];
+      const render = await this.composeSceneBlob(scene.snapshot, resolution);
+      targetWidth = render.width;
+      targetHeight = render.height;
+      const imageData = await this.blobToImageData(
+        render.blob,
+        render.width,
+        render.height
+      );
+      renderedFrames.push({ imageData });
+      this.animationProgress.set({
+        phase: 'render',
+        current: index + 1,
+        total: scenes.length,
+        message: `Szene ${index + 1} vorbereitet`,
+      });
+    }
+
+    this.animationProgress.set({
+      phase: 'encode',
+      current: 0,
+      total: scenes.length,
+      message: 'GIF encodieren …',
+    });
+
+    // GIFEncoder constructor signature: (width, height, algorithm?, useTypedArray?)
+    const encoder = new (GIFEncoder as any)(
+      targetWidth,
+      targetHeight,
+      'neuquant',
+      true
+    );
+    encoder.start();
+    if (typeof encoder.setRepeat === 'function') {
+      encoder.setRepeat(0);
+    }
+    if (typeof encoder.setDelay === 'function') {
+      encoder.setDelay(frameDuration);
+    }
+    if (typeof encoder.setTransparent === 'function') {
+      encoder.setTransparent(0x00000000);
+    }
+    if (typeof encoder.setQuality === 'function') {
+      encoder.setQuality(10);
+    }
+
+    renderedFrames.forEach((frame, index) => {
+      encoder.addFrame(frame.imageData.data);
+      this.animationProgress.set({
+        phase: 'encode',
+        current: index + 1,
+        total: renderedFrames.length,
+        message: `Frame ${index + 1} von ${renderedFrames.length}`,
+      });
+    });
+    encoder.finish();
+
+    const rawData =
+      encoder.out && typeof encoder.out.getData === 'function'
+        ? encoder.out.getData()
+        : null;
+    const buffer: Uint8Array = rawData
+      ? rawData instanceof Uint8Array
+        ? rawData
+        : new Uint8Array(Array.from(rawData as ArrayLike<number>))
+      : new Uint8Array();
+    if (!buffer.length) {
+      throw new Error('GIF Encoding lieferte keine Daten');
+    }
+
+    const blob = new Blob([buffer as unknown as BlobPart], {
+      type: option.mimeCandidates[0] ?? 'image/gif',
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `jugger-tactics-animation-${Date.now()}.${
+      option.extension
+    }`;
+    link.click();
+    URL.revokeObjectURL(url);
+
+    const baseMessage = `Animation exportiert (${option.label}) ✅`;
+    const message = option.transparentHint
+      ? `${baseMessage}\n${option.transparentHint}`
+      : baseMessage;
+    this.toastService.show({
+      message,
+      intent: 'success',
+      durationMs: DEFAULT_TOAST_DURATION_MS,
+    });
+  }
+
   async exportScreenshot(): Promise<void> {
     try {
       const resolution = this.resolveExportResolution(
         this.selectedExportResolution()
       );
-      const snapshot = this.cloneSnapshot(this.sceneSnapshot());
-      const layout = cloneFieldLayout(this.fieldLayout());
-
-      const blob = await composeTacticsScreenshot({
-        scene: snapshot,
-        width: resolution.width,
-        height: resolution.height,
-        padding: EXPORT_PADDING,
-        background: 'transparent',
-        devicePixelRatio: EXPORT_DEVICE_PIXEL_RATIO,
-        fieldLayout: layout,
-        fieldLayoutIsNormalized: true,
-        includeTeamPanels: false,
-      });
+      const { blob } = await this.composeSceneBlob(
+        this.sceneSnapshot(),
+        resolution
+      );
 
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -939,6 +1733,126 @@ export class App implements OnDestroy {
     }
   }
 
+  async exportAnimation(): Promise<void> {
+    if (this.isAnimationExporting()) {
+      return;
+    }
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      this.toastService.show({
+        message: 'Animation Export ist nur im Browser verfügbar',
+        intent: 'warning',
+        durationMs: DEFAULT_TOAST_DURATION_MS,
+      });
+      return;
+    }
+
+    const scenes = [...this.sceneDeck()];
+    if (scenes.length === 0) {
+      this.toastService.show({
+        message: 'Keine Szenen zum Export vorhanden',
+        intent: 'warning',
+        durationMs: DEFAULT_TOAST_DURATION_MS,
+      });
+      return;
+    }
+
+    if (typeof MediaRecorder === 'undefined') {
+      this.toastService.show({
+        message: 'Animation Export wird von diesem Browser nicht unterstützt',
+        intent: 'error',
+        durationMs: DEFAULT_TOAST_DURATION_MS,
+      });
+      return;
+    }
+
+    const option = this.animationFormats.find(
+      (candidate) => candidate.id === this.selectedAnimationFormat()
+    );
+    if (!option) {
+      this.toastService.show({
+        message: 'Unbekanntes Zielformat',
+        intent: 'error',
+        durationMs: DEFAULT_TOAST_DURATION_MS,
+      });
+      return;
+    }
+
+    const frameDuration = this.resolveAnimationFrameDuration();
+
+    this.isAnimationExporting.set(true);
+    this.animationProgress.set({
+      phase: 'render',
+      current: 0,
+      total: scenes.length,
+      message: 'Szenen vorbereiten …',
+    });
+
+    try {
+      if (option.id === 'gif') {
+        await this.exportAnimationAsGif({ option, scenes, frameDuration });
+      } else {
+        const mimeType = this.resolveSupportedMimeType(option.mimeCandidates);
+        if (!mimeType) {
+          this.toastService.show({
+            message: `${option.label} wird von diesem Browser nicht unterstützt`,
+            intent: 'error',
+            durationMs: DEFAULT_TOAST_DURATION_MS,
+          });
+          return;
+        }
+        await this.exportAnimationViaMediaRecorder({
+          option,
+          mimeType,
+          scenes,
+          frameDuration,
+          includeSilentAudio: option.id === 'mp4',
+        });
+      }
+    } finally {
+      this.isAnimationExporting.set(false);
+      this.animationProgress.set(null);
+    }
+  }
+
+  private resolveAnimationFrameDuration(): number {
+    const option = this.animationDurations.find(
+      (candidate) => candidate.id === this.selectedAnimationDuration()
+    );
+    return option?.durationMs ?? SCENE_ANIMATION_FRAME_DURATION_MS;
+  }
+
+  private async blobToImageData(
+    blob: Blob,
+    width: number,
+    height: number
+  ): Promise<ImageData> {
+    const bitmap = await createImageBitmap(blob);
+    try {
+      if (typeof OffscreenCanvas !== 'undefined') {
+        const canvas = new OffscreenCanvas(width, height);
+        const ctx = canvas.getContext('2d', { alpha: true });
+        if (!ctx) {
+          throw new Error('OffscreenCanvas Kontext nicht verfügbar');
+        }
+        ctx.clearRect(0, 0, width, height);
+        ctx.drawImage(bitmap, 0, 0, width, height);
+        return ctx.getImageData(0, 0, width, height);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d', { alpha: true });
+      if (!ctx) {
+        throw new Error('Canvas Kontext nicht verfügbar');
+      }
+      ctx.clearRect(0, 0, width, height);
+      ctx.drawImage(bitmap, 0, 0, width, height);
+      return ctx.getImageData(0, 0, width, height);
+    } finally {
+      bitmap.close();
+    }
+  }
+
   exportJson(): void {
     try {
       const scene = this.cloneSnapshot(this.sceneSnapshot());
@@ -947,6 +1861,8 @@ export class App implements OnDestroy {
         scene,
         fieldLayout: cloneFieldLayout(this.fieldLayout()),
         selectedTool: this.selectedTool(),
+        isFieldFlipped: this.isFieldFlipped(),
+        isFieldRotated: this.isFieldRotated(),
       };
 
       const json = JSON.stringify(payload, null, 2);
@@ -1578,6 +2494,39 @@ export class App implements OnDestroy {
     return value.toString(16).padStart(2, '0');
   }
 
+  private resolveLineStrokeColor(): string {
+    const base = this.fieldLineColor();
+    const rgb = this.hexToRgb(base);
+    if (!rgb) {
+      return base;
+    }
+    return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${DEFAULT_FIELD_LINE_ALPHA})`;
+  }
+
+  private hexToRgb(color: string): { r: number; g: number; b: number } | null {
+    const normalized = this.normalizeColor(color);
+    if (!normalized || !normalized.startsWith('#')) {
+      return null;
+    }
+    let hex = normalized.slice(1);
+    if (hex.length === 3) {
+      hex = hex
+        .split('')
+        .map((char) => char + char)
+        .join('');
+    }
+    if (hex.length !== 6) {
+      return null;
+    }
+    const r = Number.parseInt(hex.slice(0, 2), 16);
+    const g = Number.parseInt(hex.slice(2, 4), 16);
+    const b = Number.parseInt(hex.slice(4, 6), 16);
+    if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) {
+      return null;
+    }
+    return { r, g, b };
+  }
+
   private describeTarget(target: SelectTarget): string {
     if (target.type === 'token') {
       return `token:${target.id}`;
@@ -1675,6 +2624,9 @@ export class App implements OnDestroy {
     const scaleX = field.width / layoutWidth;
     const scaleY = field.height / layoutHeight;
     const strokeScale = Math.min(scaleX, scaleY);
+    const surfaceColor = this.fieldSurfaceColor();
+    const lineStroke = this.resolveLineStrokeColor();
+    const boundaryColor = this.fieldBoundaryColor();
 
     const boundary = layout.elements.find(
       (element): element is FieldLayoutLineElement =>
@@ -1683,7 +2635,7 @@ export class App implements OnDestroy {
 
     if (boundary && boundary.points.length >= 3) {
       ctx.save();
-      ctx.fillStyle = FIELD_SURFACE_COLOR;
+      ctx.fillStyle = surfaceColor;
       ctx.beginPath();
       boundary.points.forEach((point, index) => {
         const x = point.x * scaleX;
@@ -1699,7 +2651,7 @@ export class App implements OnDestroy {
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
       ctx.lineWidth = Math.max(0.5, strokeScale * 1);
-      ctx.strokeStyle = '#000000';
+      ctx.strokeStyle = boundaryColor;
       ctx.stroke();
       ctx.restore();
     }
@@ -1717,7 +2669,7 @@ export class App implements OnDestroy {
         if (element.opacity !== undefined) {
           ctx.globalAlpha = element.opacity;
         }
-        ctx.strokeStyle = element.stroke ?? 'rgba(248, 250, 252, 0.45)';
+        ctx.strokeStyle = lineStroke;
         ctx.lineWidth = (element.strokeWidth ?? 0.6) * strokeScale;
         ctx.setLineDash(
           element.dash?.map((segment) => segment * strokeScale) ?? []
@@ -1746,7 +2698,7 @@ export class App implements OnDestroy {
           ctx.globalAlpha = element.opacity;
         }
         const radiusScale = Math.min(scaleX, scaleY);
-        ctx.strokeStyle = element.stroke ?? 'rgba(248, 250, 252, 0.45)';
+        ctx.strokeStyle = lineStroke;
         ctx.lineWidth = (element.strokeWidth ?? 0.6) * radiusScale;
         ctx.setLineDash(
           element.dash?.map((segment) => segment * radiusScale) ?? []
@@ -2021,6 +2973,7 @@ export class App implements OnDestroy {
     };
     const length = Math.max(0.001, Math.hypot(direction.x, direction.y));
     const unit = { x: direction.x / length, y: direction.y / length };
+    const angle = Math.atan2(direction.y, direction.x);
     const maxHead = drawing.width * 3.6;
     const headLength = Math.min(length, maxHead);
     const shaftEnd = {
@@ -2044,6 +2997,21 @@ export class App implements OnDestroy {
           ? SELECTION_OUTLINE_EXTRA * 1.2
           : SELECTION_OUTLINE_EXTRA * 0.9);
       this.traceLinePath(ctx, shaftPoints);
+      ctx.stroke();
+
+      ctx.beginPath();
+      const headLeft = {
+        x: drawing.to.x - headLength * Math.cos(angle - Math.PI / 6),
+        y: drawing.to.y - headLength * Math.sin(angle - Math.PI / 6),
+      };
+      const headRight = {
+        x: drawing.to.x - headLength * Math.cos(angle + Math.PI / 6),
+        y: drawing.to.y - headLength * Math.sin(angle + Math.PI / 6),
+      };
+      ctx.moveTo(drawing.to.x, drawing.to.y);
+      ctx.lineTo(headLeft.x, headLeft.y);
+      ctx.lineTo(headRight.x, headRight.y);
+      ctx.closePath();
       ctx.stroke();
       ctx.restore();
     }
@@ -2576,16 +3544,265 @@ export class App implements OnDestroy {
     return Math.max(min, Math.min(max, value));
   }
 
+  private createSceneId(): string {
+    return `scene-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  }
+
+  private nextSceneLabel(): string {
+    this.sceneLabelCounter += 1;
+    return `Szene ${this.sceneLabelCounter}`;
+  }
+
+  private createSceneDeckEntry(
+    scene: SceneSnapshot,
+    options: {
+      label?: string;
+      idOverride?: string;
+      createdAt?: string;
+      updatedAt?: string;
+      previewDataUrl?: string | null;
+    } = {}
+  ): SceneDeckEntry {
+    const snapshot = this.cloneSnapshot(scene);
+    const id = options.idOverride ?? snapshot.scene.id ?? this.createSceneId();
+    if (snapshot.scene.id !== id) {
+      snapshot.scene = {
+        ...snapshot.scene,
+        id,
+      };
+    }
+    const timestamp = snapshot.scene.lastUpdatedAt ?? nowISO();
+    return {
+      id,
+      label: options.label ?? this.nextSceneLabel(),
+      createdAt: options.createdAt ?? timestamp,
+      updatedAt: options.updatedAt ?? timestamp,
+      snapshot,
+      previewDataUrl: options.previewDataUrl ?? null,
+    };
+  }
+
+  private ensureHistory(sceneId: string): SceneHistoryState {
+    let entry = this.sceneHistories.get(sceneId);
+    if (!entry) {
+      entry = { undo: [], redo: [] };
+      this.sceneHistories.set(sceneId, entry);
+    }
+    return entry;
+  }
+
+  private getActiveHistory(): SceneHistoryState {
+    return this.ensureHistory(this.activeSceneId());
+  }
+
+  private resetHistoryForScene(sceneId: string): void {
+    const history = this.ensureHistory(sceneId);
+    history.undo.length = 0;
+    history.redo.length = 0;
+    if (sceneId === this.activeSceneId()) {
+      this.undoDepth.set(0);
+      this.redoDepth.set(0);
+    }
+  }
+
+  private scheduleScenePreview(sceneId: string, snapshot: SceneSnapshot): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const existingHandle = this.pendingPreviewTimers.get(sceneId);
+    if (existingHandle) {
+      window.clearTimeout(existingHandle);
+    }
+    const snapshotCopy = this.cloneSnapshot(snapshot);
+    const expectedTimestamp = snapshotCopy.scene.lastUpdatedAt;
+    const handle = window.setTimeout(async () => {
+      this.pendingPreviewTimers.delete(sceneId);
+      const dataUrl = await this.renderScenePreview(snapshotCopy);
+      this.sceneDeck.update((entries) => {
+        const index = entries.findIndex((entry) => entry.id === sceneId);
+        if (index < 0) {
+          return entries;
+        }
+        const currentEntry = entries[index];
+        const currentTimestamp = currentEntry.snapshot.scene.lastUpdatedAt;
+        if (expectedTimestamp && currentTimestamp !== expectedTimestamp) {
+          return entries;
+        }
+        if (currentEntry.previewDataUrl === dataUrl) {
+          return entries;
+        }
+        const nextEntries = entries.slice();
+        nextEntries[index] = {
+          ...currentEntry,
+          previewDataUrl: dataUrl,
+        };
+        return nextEntries;
+      });
+    }, SCENE_PREVIEW_DEBOUNCE_MS);
+    this.pendingPreviewTimers.set(sceneId, handle);
+  }
+
+  private async renderScenePreview(
+    snapshot: SceneSnapshot
+  ): Promise<string | null> {
+    try {
+      const blob = await composeTacticsScreenshot({
+        scene: snapshot,
+        leftTeam: snapshot.leftTeam,
+        rightTeam: snapshot.rightTeam,
+        width: SCENE_PREVIEW_WIDTH,
+        height: SCENE_PREVIEW_HEIGHT,
+        padding: 16,
+        includeTeamPanels: false,
+        devicePixelRatio: EXPORT_DEVICE_PIXEL_RATIO,
+      });
+      return await this.blobToDataUrl(blob);
+    } catch (error) {
+      console.warn('Rendering scene preview failed', error);
+      return null;
+    }
+  }
+
+  private async blobToDataUrl(blob: Blob): Promise<string> {
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result;
+        if (typeof result === 'string') {
+          resolve(result);
+        } else {
+          reject(new Error('Konnte Vorschaudaten nicht lesen'));
+        }
+      };
+      reader.onerror = () => {
+        reject(
+          reader.error ?? new Error('Konnte Vorschaudaten nicht erstellen')
+        );
+      };
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  private createSilentAudioTrack(): SilentAudioTrackHandle | null {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+    const AudioContextCtor = (window.AudioContext ||
+      (window as any).webkitAudioContext) as typeof AudioContext | undefined;
+    if (!AudioContextCtor) {
+      return null;
+    }
+    const audioContext = new AudioContextCtor();
+    const destination = audioContext.createMediaStreamDestination();
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    gain.gain.value = 0;
+    oscillator.connect(gain);
+    gain.connect(destination);
+    oscillator.start();
+    const [track] = destination.stream.getAudioTracks();
+    if (!track) {
+      oscillator.stop();
+      oscillator.disconnect();
+      gain.disconnect();
+      destination.disconnect?.();
+      audioContext.close();
+      return null;
+    }
+    const dispose = async () => {
+      try {
+        oscillator.stop();
+      } catch {
+        /* ignore */
+      }
+      oscillator.disconnect();
+      gain.disconnect();
+      destination.disconnect?.();
+      await audioContext.close().catch(() => undefined);
+    };
+    return { track, dispose };
+  }
+
+  private async waitFrames(
+    durationMs: number,
+    frameIntervalMs: number
+  ): Promise<void> {
+    const frames = Math.max(1, Math.round(durationMs / frameIntervalMs));
+    let remaining = durationMs;
+    for (let i = 0; i < frames; i += 1) {
+      const step =
+        i === frames - 1
+          ? Math.max(1, Math.round(remaining))
+          : Math.max(1, Math.round(remaining / (frames - i)));
+      await this.delay(step);
+      remaining -= step;
+    }
+  }
+
+  private async paintBlobOnCanvas(
+    ctx: CanvasRenderingContext2D,
+    blob: Blob,
+    width: number,
+    height: number
+  ): Promise<void> {
+    if (typeof createImageBitmap === 'function') {
+      const bitmap = await createImageBitmap(blob);
+      ctx.clearRect(0, 0, width, height);
+      ctx.drawImage(bitmap, 0, 0, width, height);
+      bitmap.close();
+      return;
+    }
+
+    const url = URL.createObjectURL(blob);
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => {
+          ctx.clearRect(0, 0, width, height);
+          ctx.drawImage(image, 0, 0, width, height);
+          resolve();
+        };
+        image.onerror = () =>
+          reject(new Error('Bild konnte nicht geladen werden'));
+        image.src = url;
+      });
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  private async delay(ms: number): Promise<void> {
+    return await new Promise((resolve) => {
+      window.setTimeout(resolve, ms);
+    });
+  }
+
+  private triggerDownload(blob: Blob, filename: string): void {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  private buildExportBasename(option: AnimationFormatOption): string {
+    const prefix = 'jugger-tactics-animation';
+    const suffix = option.id.replace(/[^a-z0-9]+/gi, '-');
+    return `${prefix}-${suffix}-${Date.now()}`;
+  }
+
   private pushUndo(
     snapshot: SceneSnapshot,
     options: { resetRedo?: boolean } = {}
   ): void {
     const { resetRedo = true } = options;
-    this.undoStack.push(snapshot);
-    this.trimHistory(this.undoStack);
-    this.undoDepth.set(this.undoStack.length);
+    const history = this.getActiveHistory();
+    history.undo.push(snapshot);
+    this.trimHistory(history.undo);
+    this.undoDepth.set(history.undo.length);
     if (resetRedo) {
-      this.redoStack.length = 0;
+      history.redo.length = 0;
       this.redoDepth.set(0);
     }
   }
@@ -2608,13 +3825,26 @@ export class App implements OnDestroy {
       return;
     }
     try {
+      const scenes = this.sceneDeck().map((entry) => ({
+        ...entry,
+        snapshot: this.cloneSnapshot(entry.snapshot),
+      }));
+      const history: Record<string, SceneHistoryState> = {};
+      this.sceneHistories.forEach((value, key) => {
+        history[key] = {
+          undo: value.undo.map((snap) => this.cloneSnapshot(snap)),
+          redo: value.redo.map((snap) => this.cloneSnapshot(snap)),
+        };
+      });
+
       const payload: PersistedSession = {
-        scene: this.cloneSnapshot(this.sceneSnapshot()),
+        scenes,
+        activeSceneId: this.activeSceneId(),
         fieldLayout: cloneFieldLayout(this.fieldLayout()),
-        undoStack: this.undoStack.map((snap) => this.cloneSnapshot(snap)),
-        redoStack: this.redoStack.map((snap) => this.cloneSnapshot(snap)),
+        history,
         savedAt: nowISO(),
         isFieldFlipped: this.isFieldFlipped(),
+        isFieldRotated: this.isFieldRotated(),
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     } catch (error) {
@@ -2631,17 +3861,105 @@ export class App implements OnDestroy {
       return;
     }
     try {
-      const parsed = JSON.parse(raw) as PersistedSession;
-      if (!parsed || !parsed.scene) {
+      const parsed = JSON.parse(raw) as
+        | PersistedSession
+        | (PersistedSession & LegacyPersistedSession)
+        | LegacyPersistedSession
+        | null;
+
+      let session: PersistedSession | null = null;
+      if (parsed && Array.isArray((parsed as PersistedSession).scenes)) {
+        const sceneEntries = (parsed as PersistedSession).scenes
+          .map((entry, index) => {
+            if (!entry || typeof entry !== 'object') {
+              return null;
+            }
+            const snapshot =
+              (entry as SceneDeckEntry).snapshot ??
+              (entry as unknown as { scene?: SceneSnapshot }).scene;
+            if (!snapshot) {
+              return null;
+            }
+            const idCandidate = entry.id ?? snapshot.scene?.id;
+            return this.createSceneDeckEntry(snapshot, {
+              idOverride: idCandidate ?? this.createSceneId(),
+              label: entry.label ?? `Szene ${index + 1}`,
+              createdAt: entry.createdAt,
+              updatedAt: entry.updatedAt,
+              previewDataUrl: entry.previewDataUrl ?? null,
+            });
+          })
+          .filter((value): value is SceneDeckEntry => Boolean(value));
+
+        if (sceneEntries.length > 0) {
+          const historyEntries = (parsed as PersistedSession).history ?? {};
+          const history: Record<string, SceneHistoryState> = {};
+          sceneEntries.forEach((scene) => {
+            const entry = historyEntries[scene.id];
+            history[scene.id] = {
+              undo: (entry?.undo ?? []).map((snap) => this.cloneSnapshot(snap)),
+              redo: (entry?.redo ?? []).map((snap) => this.cloneSnapshot(snap)),
+            };
+          });
+
+          const activeSceneId = sceneEntries.some(
+            (entry) => entry.id === (parsed as PersistedSession).activeSceneId
+          )
+            ? (parsed as PersistedSession).activeSceneId
+            : sceneEntries[0].id;
+
+          session = {
+            scenes: sceneEntries,
+            activeSceneId,
+            fieldLayout: cloneFieldLayout(
+              (parsed as PersistedSession).fieldLayout ?? JUGGER_FIELD_LAYOUT
+            ),
+            history,
+            savedAt: parsed?.savedAt ?? nowISO(),
+            isFieldFlipped: parsed?.isFieldFlipped,
+            isFieldRotated: parsed?.isFieldRotated,
+          };
+        }
+      } else if (parsed && (parsed as LegacyPersistedSession).scene) {
+        const legacy = parsed as LegacyPersistedSession;
+        const snapshot = this.cloneSnapshot(legacy.scene);
+        const id = snapshot.scene.id ?? this.createSceneId();
+        if (snapshot.scene.id !== id) {
+          snapshot.scene = { ...snapshot.scene, id };
+        }
+        const sceneEntry = this.createSceneDeckEntry(snapshot, {
+          idOverride: id,
+          label: 'Szene 1',
+          previewDataUrl: null,
+        });
+        session = {
+          scenes: [sceneEntry],
+          activeSceneId: id,
+          fieldLayout: cloneFieldLayout(
+            legacy.fieldLayout ?? JUGGER_FIELD_LAYOUT
+          ),
+          history: {
+            [id]: {
+              undo: (legacy.undoStack ?? []).map((snap) =>
+                this.cloneSnapshot(snap)
+              ),
+              redo: (legacy.redoStack ?? []).map((snap) =>
+                this.cloneSnapshot(snap)
+              ),
+            },
+          },
+          savedAt: legacy.savedAt ?? nowISO(),
+          isFieldFlipped: legacy.isFieldFlipped,
+          isFieldRotated: legacy.isFieldRotated,
+        };
+      }
+
+      if (!session) {
         return;
       }
-      this.pendingSession = {
-        ...parsed,
-        fieldLayout: cloneFieldLayout(
-          parsed.fieldLayout ?? JUGGER_FIELD_LAYOUT
-        ),
-      };
-      const date = new Date(parsed.savedAt);
+
+      this.pendingSession = session;
+      const date = new Date(session.savedAt);
       const label = Number.isNaN(date.getTime())
         ? 'Letzte Session'
         : `Session vom ${date.toLocaleString()}`;
@@ -2672,30 +3990,84 @@ export class App implements OnDestroy {
     }
     const session = this.pendingSession;
     this.pendingSession = null;
-    this.sceneSnapshot.set(session.scene);
-    this.undoStack.splice(
-      0,
-      this.undoStack.length,
-      ...session.undoStack.map((snap) => this.cloneSnapshot(snap))
+    const sanitizedScenes = session.scenes.map((entry) =>
+      this.createSceneDeckEntry(entry.snapshot, {
+        idOverride: entry.id,
+        label: entry.label,
+        createdAt: entry.createdAt,
+        updatedAt: entry.updatedAt,
+        previewDataUrl: entry.previewDataUrl,
+      })
     );
-    this.redoStack.splice(
-      0,
-      this.redoStack.length,
-      ...session.redoStack.map((snap) => this.cloneSnapshot(snap))
-    );
-    this.undoDepth.set(this.undoStack.length);
-    this.redoDepth.set(this.redoStack.length);
-    this.toolRegistry.updateScene(session.scene);
+
+    if (sanitizedScenes.length === 0) {
+      return;
+    }
+
+    const activeSceneId = sanitizedScenes.some(
+      (entry) => entry.id === session.activeSceneId
+    )
+      ? session.activeSceneId
+      : sanitizedScenes[0].id;
+
+    this.sceneDeck.set(sanitizedScenes);
+    this.activeSceneId.set(activeSceneId);
+
+    const labelMax = sanitizedScenes.reduce((max, entry) => {
+      const match = /([0-9]+)/.exec(entry.label ?? '');
+      if (!match) {
+        return max;
+      }
+      const numeric = Number.parseInt(match[1], 10);
+      return Number.isNaN(numeric) ? max : Math.max(max, numeric);
+    }, sanitizedScenes.length);
+    this.sceneLabelCounter = Math.max(1, labelMax);
+
+    if (typeof window !== 'undefined') {
+      this.pendingPreviewTimers.forEach((handle) =>
+        window.clearTimeout(handle)
+      );
+    }
+    this.pendingPreviewTimers.clear();
+
+    const activeEntry =
+      sanitizedScenes.find((entry) => entry.id === activeSceneId) ??
+      sanitizedScenes[0];
+    const activeSnapshot = this.cloneSnapshot(activeEntry.snapshot);
+    this.sceneSnapshot.set(activeSnapshot);
+    this.toolRegistry.updateScene(activeSnapshot);
+
+    this.sceneHistories.clear();
+    sanitizedScenes.forEach((entry) => {
+      const state = session.history[entry.id];
+      this.sceneHistories.set(entry.id, {
+        undo: (state?.undo ?? []).map((snap) => this.cloneSnapshot(snap)),
+        redo: (state?.redo ?? []).map((snap) => this.cloneSnapshot(snap)),
+      });
+    });
+
+    const activeHistory = this.getActiveHistory();
+    this.undoDepth.set(activeHistory.undo.length);
+    this.redoDepth.set(activeHistory.redo.length);
+
     this.applyFieldLayout(session.fieldLayout ?? JUGGER_FIELD_LAYOUT, {
       rebuildLines: false,
     });
     this.isFieldFlipped.set(Boolean(session.isFieldFlipped));
+    this.isFieldRotated.set(Boolean(session.isFieldRotated));
     this.hoveredTarget.set(null);
     this.selectedTarget.set(null);
     this.activeDrawingHandle.set(null);
     this.isDraggingToken.set(false);
     this.isDraggingDrawing.set(false);
     this.colorMenuContext.set(null);
+
+    sanitizedScenes.forEach((entry) => {
+      if (!entry.previewDataUrl) {
+        this.scheduleScenePreview(entry.id, entry.snapshot);
+      }
+    });
+
     this.persistState();
     this.toastService.show({
       message: 'Session wiederhergestellt ✅',
@@ -2709,6 +4081,24 @@ export class App implements OnDestroy {
     if (this.supportsStorage()) {
       localStorage.removeItem(STORAGE_KEY);
     }
+  }
+
+  private readInitialTheme(): boolean {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+    try {
+      const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+      if (stored === 'dark') {
+        return true;
+      }
+      if (stored === 'light') {
+        return false;
+      }
+    } catch {
+      /* ignore storage access */
+    }
+    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
   }
 
   private supportsStorage(): boolean {

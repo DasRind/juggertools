@@ -20,9 +20,11 @@ import {
   CanvasEngine,
   EngineViewport,
   PointerContext,
-  fitSceneToViewport,
 } from '@juggertools/core-engine';
 import {
+  IDENTITY_MATRIX,
+  composeTransforms,
+  matrixApplyToPoint,
   matrixMultiply,
   matrixScale,
   matrixTranslate,
@@ -43,6 +45,7 @@ export class JuggerFieldComponent
 {
   @Input() scene?: SceneSnapshot;
   @Input() flipHorizontal = false;
+  @Input() rotateQuarterTurn = false;
 
   @Output() engineReady = new EventEmitter<CanvasEngine>();
   @Output() pointerDown = new EventEmitter<PointerContext>();
@@ -82,6 +85,12 @@ export class JuggerFieldComponent
       this.updateScene();
     }
     if (changes['flipHorizontal'] && !changes['flipHorizontal'].firstChange) {
+      this.updateTransform();
+    }
+    if (
+      changes['rotateQuarterTurn'] &&
+      !changes['rotateQuarterTurn'].firstChange
+    ) {
       this.updateTransform();
     }
   }
@@ -182,19 +191,95 @@ export class JuggerFieldComponent
       return;
     }
 
-    const base = fitSceneToViewport(scene, this.viewport, {
-      padding: FIELD_VIEW_PADDING,
-    });
+    this.syncViewportSize();
+
+    const { field, orientation } = scene.scene;
+
+    const orientationTransform =
+      orientation === 'portrait'
+        ? matrixMultiply(
+            matrixTranslate(field.height, 0),
+            { a: 0, b: 1, c: -1, d: 0, tx: 0, ty: 0 }
+          )
+        : IDENTITY_MATRIX;
+
+    let viewTransform = IDENTITY_MATRIX;
+    let effectiveWidth =
+      orientation === 'portrait' ? field.height : field.width;
+    let effectiveHeight =
+      orientation === 'portrait' ? field.width : field.height;
+
+    if (this.rotateQuarterTurn) {
+      const rotation = matrixMultiply(
+        matrixTranslate(0, effectiveWidth),
+        { a: 0, b: 1, c: -1, d: 0, tx: 0, ty: 0 }
+      );
+      viewTransform = matrixMultiply(rotation, viewTransform);
+      const nextWidth = effectiveHeight;
+      const nextHeight = effectiveWidth;
+      effectiveWidth = nextWidth;
+      effectiveHeight = nextHeight;
+    }
+
     if (this.flipHorizontal) {
-      const fieldWidth = scene.scene.field.width;
       const reflection = matrixMultiply(
-        matrixTranslate(fieldWidth, 0),
+        matrixTranslate(effectiveWidth, 0),
         matrixScale(-1, 1)
       );
-      this.engine.setTransform(matrixMultiply(base, reflection));
-    } else {
-      this.engine.setTransform(base);
+      viewTransform = matrixMultiply(reflection, viewTransform);
     }
+
+    const preTransform = matrixMultiply(viewTransform, orientationTransform);
+
+    const corners = [
+      { x: 0, y: 0 },
+      { x: field.width, y: 0 },
+      { x: field.width, y: field.height },
+      { x: 0, y: field.height },
+    ].map((point) => matrixApplyToPoint(preTransform, point));
+
+    const xs = corners.map((point) => point.x);
+    const ys = corners.map((point) => point.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+
+    const contentWidth = Math.max(1, maxX - minX);
+    const contentHeight = Math.max(1, maxY - minY);
+
+    const padding = FIELD_VIEW_PADDING;
+    const paddedWidth = Math.max(1, this.viewport.width - padding * 2);
+    const paddedHeight = Math.max(1, this.viewport.height - padding * 2);
+    const scale = Math.min(paddedWidth / contentWidth, paddedHeight / contentHeight);
+
+    const transform = composeTransforms([
+      matrixTranslate(
+        padding + (paddedWidth - contentWidth * scale) / 2,
+        padding + (paddedHeight - contentHeight * scale) / 2
+      ),
+      matrixScale(scale),
+      matrixTranslate(-minX, -minY),
+      preTransform,
+    ]);
+
+    this.engine.setTransform(transform);
     this.engine.draw();
+  }
+
+  private syncViewportSize(): void {
+    if (!this.engine) {
+      return;
+    }
+    const canvas = this.canvasRef.nativeElement;
+    const rect = canvas.getBoundingClientRect();
+    const width = Math.max(1, Math.floor(rect.width || canvas.clientWidth || canvas.width));
+    const height = Math.max(1, Math.floor(rect.height || canvas.clientHeight || canvas.height));
+    if (width === this.viewport.width && height === this.viewport.height) {
+      return;
+    }
+    this.viewport = { width, height };
+    this.engine.resize(width, height);
+    this.viewportChange.emit(this.viewport);
   }
 }

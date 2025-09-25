@@ -1,34 +1,42 @@
 <div class="page">
   <header class="page__header">
-    <h1 class="page__title">Jugger Tactics Tool</h1>
-    <div class="page__toolbar">
-      <div class="tool-buttons">
-        <div class="tool-buttons__item" *ngFor="let tool of toolShortcuts">
-          <span
-            class="tool-buttons__shortcut"
-            [class.tool-buttons__shortcut--active]="tool.id === selectedTool()"
-          >
-            {{ tool.shortcut }}
-          </span>
-          <button
-            type="button"
-            class="tool-button"
-            [class.tool-button--active]="tool.id === selectedTool()"
-            (click)="selectTool(tool.id)"
-          >
-            <span class="tool-button__label">{{ tool.label }}</span>
-          </button>
-        </div>
+    <div class="page__brand">
+      <div class="page__logo">
+        <img
+          src="/tacticslogoNoBackground.png"
+          alt="Jugger Tactics Tool"
+          class="page__logo-image"
+        />
+        <img
+          src="/tacticslogoIdea.png"
+          alt=""
+          aria-hidden="true"
+          class="page__logo-overlay"
+        />
+      </div>
+      <h1 class="page__title">Jugger Tactics Tool</h1>
+      <div class="page__actions">
+        <button
+          type="button"
+          class="theme-toggle"
+          (click)="toggleTheme()"
+          [attr.aria-pressed]="isDarkMode()"
+          aria-label="Darstellung wechseln"
+        >
+          <span class="theme-toggle__icon" aria-hidden="true"></span>
+          <span class="theme-toggle__label">{{ themeToggleLabel() }}</span>
+        </button>
       </div>
     </div>
   </header>
 
   <main class="page__body">
-    <aside class="team-panel team-panel--left">
-      <header class="team-panel__header">
-        <div class="team-panel__startRow">
-          <h2 class="" tea>{{ leftTeam.name }}</h2>
-          <div class="team-panel__info"></div>
+    <div class="page__main-row">
+      <aside class="team-panel team-panel--left">
+        <header class="team-panel__header">
+          <div class="team-panel__startRow">
+            <h2 class="" tea>{{ leftTeam.name }}</h2>
+            <div class="team-panel__info"></div>
         </div>
         <div class="team-panel__teamBrand">
           <img class="team-panel__avatar" aria-hidden="true" />
@@ -63,20 +71,31 @@
       (drop)="handleDrop($event)"
     >
       <div class="field-area__surface">
+        <jugger-field
+          class="field-component"
+          [scene]="scene()"
+          [flipHorizontal]="isFieldFlipped()"
+          [rotateQuarterTurn]="isFieldRotated()"
+          [style.aspect-ratio]="fieldAspectRatio()"
+          (engineReady)="handleEngineReady($event)"
+          (viewportChange)="handleViewportChange($event)"
+          (pointerDown)="handlePointer($event)"
+          (pointerMove)="handlePointer($event)"
+          (pointerUp)="handlePointer($event)"
+          (pointerCancel)="handlePointer($event)"
+        ></jugger-field>
+      </div>
+
+      <div class="page__stack">
         <div class="field-status">
           <div class="field-status__section field-status__selection">
-            <ng-container
-              *ngIf="selectedStatus() as selection; else noSelection"
-            >
+            <ng-container *ngIf="selectedStatus() as selection; else noSelection">
               <div class="field-status__info">
                 <span class="field-status__label">Auswahl</span>
                 <span class="field-status__value">{{ selection.label }}</span>
               </div>
               <div class="field-status__actions">
-                <div
-                  class="field-status__colors"
-                  *ngIf="selection.supportsColor"
-                >
+                <div class="field-status__colors" *ngIf="selection.supportsColor">
                   <button
                     type="button"
                     class="field-status__color-button"
@@ -131,10 +150,7 @@
             </ng-template>
           </div>
 
-          <div
-            class="field-status__section field-status__tool"
-            *ngIf="toolStatus() as tool"
-          >
+          <div class="field-status__section field-status__tool" *ngIf="toolStatus() as tool">
             <ng-container [ngSwitch]="tool.kind">
               <div *ngSwitchCase="'pen'" class="field-status__tool-content">
                 <span class="field-status__label">{{ tool.label }}</span>
@@ -245,141 +261,284 @@
             >
               ⇄
             </button>
+            <button
+              type="button"
+              class="field-status__flip"
+              (click)="toggleFieldRotation()"
+              [attr.aria-pressed]="isFieldRotated()"
+              aria-label="Feld um 90° drehen"
+            >
+              ⟳
+            </button>
           </div>
         </div>
-        <jugger-field
-          class="field-component"
-          [scene]="scene()"
-          [flipHorizontal]="isFieldFlipped()"
-          (engineReady)="handleEngineReady($event)"
-          (viewportChange)="handleViewportChange($event)"
-          (pointerDown)="handlePointer($event)"
-          (pointerMove)="handlePointer($event)"
-          (pointerUp)="handlePointer($event)"
-          (pointerCancel)="handlePointer($event)"
-        ></jugger-field>
-      </div>
 
-      <footer class="field-area__footer">
-        <div class="field-area__control-row">
-          <input
-            #importJsonInput
-            type="file"
-            accept="application/json"
-            class="field-area__import-input"
-            (change)="importJson($event)"
-          />
-          <div class="field-area__toggles">
+        <div class="tool-buttons">
+          <div class="tool-buttons__item" *ngFor="let tool of toolShortcuts">
+            <span
+              class="tool-buttons__shortcut"
+              [class.tool-buttons__shortcut--active]="tool.id === selectedTool()"
+            >
+              {{ tool.shortcut }}
+            </span>
             <button
               type="button"
-              class="toggle-button"
-              [class.toggle-button--active]="showPlayerNames()"
-              (click)="togglePlayerNames()"
+              class="tool-button"
+              [class.tool-button--active]="tool.id === selectedTool()"
+              (click)="selectTool(tool.id)"
             >
-              <span class="toggle-button__label">Spieler Namen:</span>
-              <span class="toggle-button__value"
-                >{{ playerNameToggleLabel() }}</span
-              >
-            </button>
-            <button
-              type="button"
-              class="toggle-button"
-              [class.toggle-button--active]="showStartingPositions()"
-              (click)="toggleStartingPositions()"
-            >
-              <span class="toggle-button__label">Startpositionen:</span>
-              <span class="toggle-button__value"
-                >{{ startingPositionsToggleLabel() }}</span
-              >
-            </button>
-            <button
-              type="button"
-              class="toggle-button"
-              [class.toggle-button--active]="hasJugg()"
-              (click)="spawnJugg()"
-            >
-              <span class="toggle-button__label">Jugg:</span>
-              <span class="toggle-button__value"
-                >{{ hasJugg() ? 'Neu zentrieren' : 'Platzieren' }}</span
-              >
+              <span class="tool-button__label">{{ tool.label }}</span>
             </button>
           </div>
+        </div>
 
-          <div class="field-area__history history-indicator">
-            <div class="history-indicator__row">
-              <span>Undo</span>
-              <div class="history-indicator__bar">
-                <div
-                  class="history-indicator__fill"
-                  [style.width.%]="undoFill()"
-                ></div>
-              </div>
-              <span>{{ undoDepth() }}/{{ historyCapacity }}</span>
-            </div>
-            <div class="history-indicator__row">
-              <span>Redo</span>
-              <div class="history-indicator__bar">
-                <div
-                  class="history-indicator__fill history-indicator__fill--redo"
-                  [style.width.%]="redoFill()"
-                ></div>
-              </div>
-              <span>{{ redoDepth() }}/{{ historyCapacity }}</span>
-            </div>
-          </div>
-
-          <div class="field-area__actions">
-            <button type="button" (click)="undo()" [disabled]="!canUndo()">
-              Undo ({{ undoDepth() }})
-            </button>
-            <button type="button" (click)="redo()" [disabled]="!canRedo()">
-              Redo ({{ redoDepth() }})
-            </button>
+        <div class="scene-strip" role="tablist" aria-label="Szenen">
+          <div class="scene-strip__list">
             <button
               type="button"
-              class="field-area__export"
-              (click)="triggerImportJson(importJsonInput)"
+              class="scene-strip__item"
+              *ngFor="let item of scenes(); trackBy: trackScene"
+              [class.scene-strip__item--active]="item.id === activeSceneIdValue()"
+              (click)="activateScene(item.id)"
+              role="tab"
+              [attr.aria-selected]="item.id === activeSceneIdValue()"
             >
-              Import JSON
-            </button>
-            <button
-              type="button"
-              class="field-area__export"
-              (click)="exportJson()"
-            >
-              Export JSON
-            </button>
-            <label class="field-area__resolution">
-              <span class="field-area__resolution-label">Auflösung</span>
-              <select
-                #resolutionSelect
-                class="field-area__resolution-select"
-                [value]="selectedExportResolution()"
-                (change)="setExportResolution(resolutionSelect.value)"
-              >
-                <option
-                  *ngFor="let option of exportResolutions"
-                  [value]="option.id"
+              <div
+                class="scene-strip__thumbnail"
+                [class.scene-strip__thumbnail--empty]="!item.previewDataUrl"
+                [style.background-image]="item.previewDataUrl ? 'url(' + item.previewDataUrl + ')' : ''"
+              ></div>
+              <div class="scene-strip__meta">
+                <span class="scene-strip__label">{{ item.label }}</span>
+                <span class="scene-strip__time"
+                  >{{ item.updatedAt | date: 'HH:mm' }}</span
                 >
-                  {{ option.label }}
-                </option>
-              </select>
-            </label>
-            <button
-              type="button"
-              class="field-area__export"
-              (click)="exportScreenshot()"
-            >
-              Export PNG
+              </div>
             </button>
           </div>
+          <button
+            type="button"
+            class="scene-strip__add"
+            (click)="addScene()"
+            aria-label="Neue Szene hinzufügen"
+          >
+            <span aria-hidden="true">+</span>
+          </button>
         </div>
 
-        <p class="field-area__pointer" *ngIf="lastPointerEvent() as pointer">
-          Letztes Event: {{ pointer }}
-        </p>
-      </footer>
+        <footer class="field-area__footer">
+          <div class="field-area__control-row">
+            <input
+              #importJsonInput
+              type="file"
+              accept="application/json"
+              class="field-area__import-input"
+              (change)="importJson($event)"
+            />
+            <div class="field-area__toggles">
+              <button
+                type="button"
+                class="toggle-button"
+                [class.toggle-button--active]="showPlayerNames()"
+                (click)="togglePlayerNames()"
+              >
+                <span class="toggle-button__label">Spieler Namen:</span>
+                <span class="toggle-button__value"
+                  >{{ playerNameToggleLabel() }}</span
+                >
+              </button>
+              <button
+                type="button"
+                class="toggle-button"
+                [class.toggle-button--active]="showStartingPositions()"
+                (click)="toggleStartingPositions()"
+              >
+                <span class="toggle-button__label">Startpositionen:</span>
+                <span class="toggle-button__value"
+                  >{{ startingPositionsToggleLabel() }}</span
+                >
+              </button>
+              <button
+                type="button"
+                class="toggle-button"
+                [class.toggle-button--active]="hasJugg()"
+                (click)="spawnJugg()"
+              >
+                <span class="toggle-button__label">Jugg:</span>
+                <span class="toggle-button__value"
+                  >{{ hasJugg() ? 'Neu zentrieren' : 'Platzieren' }}</span
+                >
+              </button>
+              <div
+                class="field-settings"
+                [class.field-settings--open]="showFieldSettings()"
+              >
+                <button
+                  type="button"
+                  class="toggle-button field-settings__toggle"
+                  [class.toggle-button--active]="showFieldSettings()"
+                  (click)="toggleFieldSettings()"
+                >
+                  <span class="toggle-button__label">Feld:</span>
+                  <span class="toggle-button__value">Farben</span>
+                </button>
+                <div *ngIf="showFieldSettings()" class="field-settings__dropdown">
+                  <label class="field-settings__option">
+                    <span>Feldfläche</span>
+                    <input
+                      #surfaceColorPicker
+                      type="color"
+                      [value]="fieldSurfaceColor()"
+                      (input)="updateFieldSurfaceColor(surfaceColorPicker.value)"
+                    />
+                  </label>
+                  <label class="field-settings__option">
+                    <span>Linien</span>
+                    <input
+                      #lineColorPicker
+                      type="color"
+                      [value]="fieldLineColor()"
+                      (input)="updateFieldLineColor(lineColorPicker.value)"
+                    />
+                  </label>
+                  <label class="field-settings__option">
+                    <span>Umrandung</span>
+                    <input
+                      #borderColorPicker
+                      type="color"
+                      [value]="fieldBoundaryColor()"
+                      (input)="updateFieldBoundaryColor(borderColorPicker.value)"
+                    />
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div class="field-area__history history-indicator">
+              <div class="history-indicator__row">
+                <span>Undo</span>
+                <div class="history-indicator__bar">
+                  <div
+                    class="history-indicator__fill"
+                    [style.width.%]="undoFill()"
+                  ></div>
+                </div>
+                <span>{{ undoDepth() }}/{{ historyCapacity }}</span>
+              </div>
+              <div class="history-indicator__row">
+                <span>Redo</span>
+                <div class="history-indicator__bar">
+                  <div
+                    class="history-indicator__fill history-indicator__fill--redo"
+                    [style.width.%]="redoFill()"
+                  ></div>
+                </div>
+                <span>{{ redoDepth() }}/{{ historyCapacity }}</span>
+              </div>
+            </div>
+
+            <div class="field-area__actions">
+              <button type="button" (click)="undo()" [disabled]="!canUndo()">
+                Undo ({{ undoDepth() }})
+              </button>
+              <button type="button" (click)="redo()" [disabled]="!canRedo()">
+                Redo ({{ redoDepth() }})
+              </button>
+              <button
+                type="button"
+                class="field-area__export"
+                (click)="triggerImportJson(importJsonInput)"
+              >
+                Import JSON
+              </button>
+              <button
+                type="button"
+                class="field-area__export"
+                (click)="exportJson()"
+              >
+                Export JSON
+              </button>
+              <label class="field-area__resolution">
+                <span class="field-area__resolution-label">Auflösung</span>
+                <select
+                  #resolutionSelect
+                  class="field-area__resolution-select"
+                  [value]="selectedExportResolution()"
+                  (change)="setExportResolution(resolutionSelect.value)"
+                >
+                  <option
+                    *ngFor="let option of exportResolutions"
+                    [value]="option.id"
+                  >
+                    {{ option.label }}
+                  </option>
+                </select>
+              </label>
+              <label class="field-area__resolution">
+                <span class="field-area__resolution-label">Format</span>
+                <select
+                  #animationFormatSelect
+                  class="field-area__resolution-select"
+                  [value]="selectedAnimationFormat()"
+                  (change)="setAnimationFormat(animationFormatSelect.value)"
+                >
+                  <option
+                    *ngFor="let option of animationFormats"
+                    [value]="option.id"
+                  >
+                    {{ option.label }}
+                  </option>
+                </select>
+              </label>
+              <label class="field-area__resolution">
+                <span class="field-area__resolution-label">Dauer pro Szene</span>
+                <select
+                  #animationDurationSelect
+                  class="field-area__resolution-select"
+                  [value]="selectedAnimationDuration()"
+                  (change)="setAnimationDuration(animationDurationSelect.value)"
+                >
+                  <option
+                    *ngFor="let option of animationDurations"
+                    [value]="option.id"
+                  >
+                    {{ option.label }}
+                  </option>
+                </select>
+              </label>
+              <button
+                type="button"
+                class="field-area__export"
+                (click)="exportScreenshot()"
+              >
+                Export PNG
+              </button>
+              <button
+                type="button"
+                class="field-area__export"
+                (click)="exportAnimation()"
+                [disabled]="!canExportAnimation() || isAnimationExporting()"
+              >
+                <ng-container *ngIf="!isAnimationExporting(); else exportingAnimation">
+                  Export Animation
+                </ng-container>
+                <ng-template #exportingAnimation>
+                  <span class="field-area__exporting">
+                    <span class="field-area__spinner" aria-hidden="true"></span>
+                    {{ animationProgress()?.message ?? 'Export läuft …' }}
+                  </span>
+                </ng-template>
+              </button>
+            </div>
+          </div>
+
+          <p class="field-area__pointer" *ngIf="lastPointerEvent() as pointer">
+            Letztes Event: {{ pointer }}
+          </p>
+        </footer>
+      </div>
     </section>
+
 
     <aside class="team-panel team-panel--right">
       <header class="team-panel__header">
@@ -414,6 +573,8 @@
         </li>
       </ul>
     </aside>
+    </div>
+
   </main>
 </div>
 
