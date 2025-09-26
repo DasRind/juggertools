@@ -46,6 +46,8 @@ export class JuggerFieldComponent
   @Input() scene?: SceneSnapshot;
   @Input() flipHorizontal = false;
   @Input() rotateQuarterTurn = false;
+  @Input() zoom = 1;
+  @Input() viewportSync = 0;
 
   @Output() engineReady = new EventEmitter<CanvasEngine>();
   @Output() pointerDown = new EventEmitter<PointerContext>();
@@ -61,6 +63,7 @@ export class JuggerFieldComponent
   private resizeObserver?: ResizeObserver;
   private pointerDisposers: Array<() => void> = [];
   private viewport: EngineViewport = { width: 0, height: 0 };
+  private viewportSyncHandle: number | null = null;
 
   constructor(
     private readonly ngZone: NgZone,
@@ -93,6 +96,12 @@ export class JuggerFieldComponent
     ) {
       this.updateTransform();
     }
+    if (changes['zoom'] && !changes['zoom'].firstChange) {
+      this.updateTransform();
+    }
+    if (changes['viewportSync'] && !changes['viewportSync'].firstChange) {
+      this.scheduleViewportSync();
+    }
   }
 
   ngOnDestroy(): void {
@@ -101,6 +110,14 @@ export class JuggerFieldComponent
     this.resizeObserver?.disconnect();
     this.engine?.destroy();
     this.engine = undefined;
+    if (
+      this.viewportSyncHandle !== null &&
+      typeof window !== 'undefined' &&
+      typeof window.cancelAnimationFrame === 'function'
+    ) {
+      window.cancelAnimationFrame(this.viewportSyncHandle);
+    }
+    this.viewportSyncHandle = null;
   }
 
   private initializeEngine(): void {
@@ -253,7 +270,7 @@ export class JuggerFieldComponent
     const paddedHeight = Math.max(1, this.viewport.height - padding * 2);
     const scale = Math.min(paddedWidth / contentWidth, paddedHeight / contentHeight);
 
-    const transform = composeTransforms([
+    let transform = composeTransforms([
       matrixTranslate(
         padding + (paddedWidth - contentWidth * scale) / 2,
         padding + (paddedHeight - contentHeight * scale) / 2
@@ -263,8 +280,38 @@ export class JuggerFieldComponent
       preTransform,
     ]);
 
+    const normalizedZoom = Math.max(0.01, Number.isFinite(this.zoom) ? this.zoom : 1);
+    if (Math.abs(normalizedZoom - 1) > 0.001) {
+      const centerX = this.viewport.width / 2;
+      const centerY = this.viewport.height / 2;
+      const zoomMatrix = composeTransforms([
+        matrixTranslate(centerX, centerY),
+        matrixScale(normalizedZoom),
+        matrixTranslate(-centerX, -centerY),
+      ]);
+      transform = matrixMultiply(zoomMatrix, transform);
+    }
+
     this.engine.setTransform(transform);
     this.engine.draw();
+  }
+
+  private scheduleViewportSync(): void {
+    if (!this.engine) {
+      return;
+    }
+    const hasWindow = typeof window !== 'undefined';
+    if (hasWindow && typeof window.requestAnimationFrame === 'function') {
+      if (this.viewportSyncHandle !== null && typeof window.cancelAnimationFrame === 'function') {
+        window.cancelAnimationFrame(this.viewportSyncHandle);
+      }
+      this.viewportSyncHandle = window.requestAnimationFrame(() => {
+        this.viewportSyncHandle = null;
+        this.updateTransform();
+      });
+      return;
+    }
+    this.updateTransform();
   }
 
   private syncViewportSize(): void {
@@ -272,9 +319,13 @@ export class JuggerFieldComponent
       return;
     }
     const canvas = this.canvasRef.nativeElement;
+    const container = canvas.parentElement;
     const rect = canvas.getBoundingClientRect();
-    const width = Math.max(1, Math.floor(rect.width || canvas.clientWidth || canvas.width));
-    const height = Math.max(1, Math.floor(rect.height || canvas.clientHeight || canvas.height));
+    const rawWidth = container?.clientWidth || rect.width || canvas.clientWidth || canvas.width;
+    const rawHeight =
+      container?.clientHeight || rect.height || canvas.clientHeight || canvas.height;
+    const width = Math.max(1, Math.floor(rawWidth));
+    const height = Math.max(1, Math.floor(rawHeight));
     if (width === this.viewport.width && height === this.viewport.height) {
       return;
     }

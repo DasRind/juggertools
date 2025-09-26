@@ -44,6 +44,7 @@ import {
   Team,
   Token,
 } from '@juggertools/core-domain';
+import { matrixApplyToPoint } from '@juggertools/core-geometry';
 import {
   DEFAULT_FIELD_DIMENSIONS,
   JUGGER_FIELD_LAYOUT,
@@ -166,7 +167,9 @@ const HISTORY_CAPACITY = 30;
 const DEFAULT_TOAST_DURATION_MS = 4000;
 const STORAGE_KEY = 'juggertools:tactics:session';
 const VISUAL_SCALE = 5.4;
-const TOKEN_RADIUS = 3.4 * VISUAL_SCALE;
+const TOKEN_BASE_RADIUS = 3.4 * VISUAL_SCALE;
+const TOKEN_SCALE_MIN = 0.6;
+const TOKEN_SCALE_MAX = 1.6;
 const SELECTION_OUTLINE_EXTRA = 1.0 * VISUAL_SCALE;
 const SELECTED_OUTLINE_COLOR = 'rgba(248, 208, 208, 1)';
 const HOVER_OUTLINE_COLOR = 'rgba(215, 186, 186, 0.8)';
@@ -176,8 +179,18 @@ const DEFAULT_JUGG_COLOR = '#facc15';
 const DEFAULT_JUGG_STROKE = '#111827';
 const JUGG_WIDTH = 3.2 * VISUAL_SCALE;
 const JUGG_HEIGHT = 7.2 * VISUAL_SCALE;
+const LINE_BASE_WIDTH = 1.6 * VISUAL_SCALE;
+const PEN_BASE_WIDTH = 2 * VISUAL_SCALE;
+const ARROW_BASE_WIDTH = 2.5 * VISUAL_SCALE;
+const STROKE_FACTOR_MIN = 0.5;
+const STROKE_FACTOR_MAX = 1.8;
+const FIELD_ZOOM_MIN = 0.5;
+const FIELD_ZOOM_MAX = 2.5;
+const ERASER_RADIUS_MIN = 2.6 * VISUAL_SCALE;
+const ERASER_RADIUS_MAX = 5.4 * VISUAL_SCALE;
+const DEFAULT_ERASER_RADIUS = 3.6 * VISUAL_SCALE;
 const JUGG_CORNER_RATIO = 0.28;
-const FIELD_SURFACE_COLOR = '#2ac88bff';
+const FIELD_SURFACE_COLOR = '#2ac88b';
 const DEFAULT_FIELD_LINE_COLOR = '#f8fafc';
 const DEFAULT_FIELD_BOUNDARY_COLOR = '#000000';
 const DEFAULT_FIELD_LINE_ALPHA = 0.55;
@@ -227,8 +240,6 @@ interface ToolStatus {
   label: string;
   color?: string;
   palette?: readonly string[];
-  sizes?: ReadonlyArray<{ id: string; label: string; radius: number }>;
-  selectedSize?: string;
 }
 
 interface ExportResolutionOption {
@@ -449,24 +460,41 @@ export class App implements OnDestroy {
     this.exportResolutions[1]?.id ?? 'hd'
   );
 
-  readonly eraserSizes = [
-    { id: 'small', label: 'Fein', radius: 2.6 * VISUAL_SCALE },
-    { id: 'medium', label: 'Mittel', radius: 3.6 * VISUAL_SCALE },
-    { id: 'large', label: 'Groß', radius: 5.2 * VISUAL_SCALE },
-  ] as const;
-  readonly selectedEraserSize =
-    signal<(typeof this.eraserSizes)[number]['id']>('medium');
+  readonly eraserRadius = signal<number>(DEFAULT_ERASER_RADIUS);
 
   readonly fieldSurfaceColor = signal<string>(FIELD_SURFACE_COLOR);
   readonly fieldLineColor = signal<string>(DEFAULT_FIELD_LINE_COLOR);
   readonly fieldBoundaryColor = signal<string>(DEFAULT_FIELD_BOUNDARY_COLOR);
   readonly showFieldSettings = signal<boolean>(false);
+  readonly showToolsPanel = signal<boolean>(true);
+  readonly showAnimationPanel = signal<boolean>(true);
+  readonly showAdvancedPanel = signal<boolean>(false);
+  readonly showExportPanel = signal<boolean>(false);
+  readonly tokenScale = signal<number>(1);
+  readonly strokeWidthFactor = signal<number>(1);
+  readonly fieldZoom = signal<number>(1);
+  readonly tokenScaleMin = TOKEN_SCALE_MIN;
+  readonly tokenScaleMax = TOKEN_SCALE_MAX;
+  readonly strokeFactorMin = STROKE_FACTOR_MIN;
+  readonly strokeFactorMax = STROKE_FACTOR_MAX;
+  readonly eraserRadiusMin = ERASER_RADIUS_MIN;
+  readonly eraserRadiusMax = ERASER_RADIUS_MAX;
+
+  readonly tokenScaleLabel = computed(() =>
+    `${Math.round(this.tokenScale() * 100)}%`
+  );
+  readonly strokeWidthFactorLabel = computed(() =>
+    `${Math.round(this.strokeWidthFactor() * 100)}%`
+  );
+  readonly eraserRadiusLabel = computed(() =>
+    `${Math.round(this.eraserRadius())} px`
+  );
 
   readonly hoveredTarget = signal<SelectTarget | null>(null);
   readonly selectedTarget = signal<SelectTarget | null>(null);
   readonly activeDrawingHandle = signal<{
     drawingId: string;
-    handle: 'start' | 'end';
+    handle: 'start' | 'end' | 'radius';
   } | null>(null);
   readonly isDraggingToken = signal<boolean>(false);
   readonly isDraggingDrawing = signal<boolean>(false);
@@ -491,12 +519,11 @@ export class App implements OnDestroy {
     return target?.type === 'drawing' ? target.id : null;
   });
 
-  readonly hoveredLineHandle = computed(() => {
+  readonly hoveredDrawingHandle = computed(() => {
     const target = this.hoveredTarget();
     return target?.type === 'drawing' && target.handle ? target : null;
   });
-
-  readonly activeLineHandle = computed(() => this.activeDrawingHandle());
+  readonly activeHandleState = computed(() => this.activeDrawingHandle());
 
   readonly toast = this.toastService.toast;
 
@@ -605,6 +632,7 @@ export class App implements OnDestroy {
   );
   readonly isFieldFlipped = signal(false);
   readonly isFieldRotated = signal(false);
+  readonly viewportSyncToken = signal(0);
   readonly fieldAspectRatio = computed(() => {
     const snapshot = this.scene();
     const orientation = snapshot.scene.orientation ?? 'landscape';
@@ -683,8 +711,6 @@ export class App implements OnDestroy {
       return {
         kind: 'eraser',
         label: 'Radierer',
-        sizes: this.eraserSizes,
-        selectedSize: this.selectedEraserSize(),
       };
     }
     return null;
@@ -736,6 +762,21 @@ export class App implements OnDestroy {
       this.hoveredTarget();
       this.selectedTool();
       queueMicrotask(() => this.updateCanvasCursor());
+    });
+    effect(() => {
+      const scaleFactor = this.tokenScale();
+      this.applyTokenConfiguration(scaleFactor);
+    });
+    effect(() => {
+      const factor = this.strokeWidthFactor();
+      this.applyStrokeConfiguration(factor);
+    });
+    effect(() => {
+      const radius = this.eraserRadius();
+      this.applyEraserConfiguration(radius);
+      if (this.selectedTool() === 'eraser') {
+        this.engine?.draw();
+      }
     });
     this.loadPersistedSession();
   }
@@ -815,6 +856,39 @@ export class App implements OnDestroy {
     this.persistState();
   }
 
+  deleteScene(sceneId: string): void {
+    const entries = this.sceneDeck();
+    if (entries.length <= 1) {
+      return;
+    }
+    const index = entries.findIndex((entry) => entry.id === sceneId);
+    if (index < 0) {
+      return;
+    }
+    const nextEntries = entries.filter((entry) => entry.id !== sceneId);
+    const wasActive = sceneId === this.activeSceneId();
+    const fallbackEntry = wasActive
+      ? nextEntries[index] ?? nextEntries[index - 1] ?? nextEntries[0]
+      : undefined;
+
+    this.sceneDeck.set(nextEntries);
+
+    if (typeof window !== 'undefined') {
+      const handle = this.pendingPreviewTimers.get(sceneId);
+      if (handle) {
+        window.clearTimeout(handle);
+        this.pendingPreviewTimers.delete(sceneId);
+      }
+    }
+    this.sceneHistories.delete(sceneId);
+
+    if (wasActive && fallbackEntry) {
+      this.activateScene(fallbackEntry.id);
+    }
+
+    this.persistState();
+  }
+
   activateScene(sceneId: string): void {
     if (sceneId === this.activeSceneId()) {
       return;
@@ -847,18 +921,6 @@ export class App implements OnDestroy {
 
   trackScene(_index: number, entry: SceneDeckEntry): string {
     return entry.id;
-  }
-
-  selectEraserSize(sizeId: string): void {
-    const option = this.eraserSizes.find(({ id }) => id === sizeId);
-    if (!option) {
-      return;
-    }
-    this.selectedEraserSize.set(option.id);
-    this.applyEraserConfiguration();
-    if (this.selectedTool() === 'eraser') {
-      this.engine?.draw();
-    }
   }
 
   toggleColorMenu(context: 'selection' | 'pen' | 'arrow'): void {
@@ -1073,18 +1135,170 @@ export class App implements OnDestroy {
     });
   }
 
-  private applyEraserConfiguration(): void {
+  private applyEraserConfiguration(radius?: number): void {
+    const effectiveRadius = radius ?? this.eraserRadius();
     this.toolRegistry.configureTool('eraser', {
-      radius: this.getEraserRadius(this.selectedEraserSize()),
+      radius: effectiveRadius,
     });
   }
 
-  private getEraserRadius(
-    sizeId: (typeof this.eraserSizes)[number]['id']
-  ): number {
-    return (
-      this.eraserSizes.find((option) => option.id === sizeId)?.radius ?? 3.6
-    );
+  private applyTokenConfiguration(scale: number): void {
+    this.toolRegistry.configureTool('select', {
+      tokenRadius: this.getTokenRadius(scale),
+    });
+    this.updateJuggTokenDimensions(scale);
+    this.engine?.draw();
+  }
+
+  private updateJuggTokenDimensions(scale: number): void {
+    const width = JUGG_WIDTH * scale;
+    const height = JUGG_HEIGHT * scale;
+    const current = this.sceneSnapshot();
+    const needsUpdate = current.scene.tokens.some((token) => {
+      if (token.shape !== 'rectangle') {
+        return false;
+      }
+      const currentWidth = token.width ?? width;
+      const currentHeight = token.height ?? height;
+      return (
+        Math.abs(currentWidth - width) >= 0.001 ||
+        Math.abs(currentHeight - height) >= 0.001
+      );
+    });
+    if (!needsUpdate) {
+      return;
+    }
+    this.applySceneUpdate((state) => {
+      let changed = false;
+      const tokens = state.scene.tokens.map((token) => {
+        if (token.shape === 'rectangle') {
+          const currentWidth = token.width ?? width;
+          const currentHeight = token.height ?? height;
+          if (
+            Math.abs(currentWidth - width) < 0.001 &&
+            Math.abs(currentHeight - height) < 0.001
+          ) {
+            return token;
+          }
+          changed = true;
+          return {
+            ...token,
+            width,
+            height,
+          };
+        }
+        return token;
+      });
+      if (!changed) {
+        return state;
+      }
+      return {
+        ...state,
+        scene: {
+          ...state.scene,
+          tokens,
+        },
+      };
+    });
+  }
+
+  private applyStrokeConfiguration(factor: number): void {
+    const lineWidth = LINE_BASE_WIDTH * factor;
+    const penWidth = PEN_BASE_WIDTH * factor;
+    const arrowWidth = ARROW_BASE_WIDTH * factor;
+
+    this.toolRegistry.configureTool('line', { width: lineWidth });
+    this.toolRegistry.configureTool('pen', { width: penWidth });
+    this.toolRegistry.configureTool('arrow', { width: arrowWidth });
+
+    const current = this.sceneSnapshot();
+    const needsUpdate = current.scene.drawings.some((drawing) => {
+      if (drawing.kind === 'line') {
+        return Math.abs(drawing.width - lineWidth) >= 0.001;
+      }
+      if (drawing.kind === 'pen') {
+        return Math.abs(drawing.width - penWidth) >= 0.001;
+      }
+      if (drawing.kind === 'arrow') {
+        return Math.abs(drawing.width - arrowWidth) >= 0.001;
+      }
+      return false;
+    });
+    if (!needsUpdate) {
+      return;
+    }
+
+    this.applySceneUpdate((state) => {
+      let changed = false;
+      let timestamp: string | null = null;
+      const ensureTimestamp = () => {
+        if (!timestamp) {
+          timestamp = nowISO();
+        }
+        return timestamp;
+      };
+
+      const drawings = state.scene.drawings.map((drawing) => {
+        if (drawing.kind === 'line') {
+          if (Math.abs(drawing.width - lineWidth) < 0.001) {
+            return drawing;
+          }
+          changed = true;
+          const updatedAt = ensureTimestamp();
+          return {
+            ...drawing,
+            width: lineWidth,
+            meta: {
+              createdAt: drawing.meta?.createdAt ?? updatedAt,
+              updatedAt,
+            },
+          };
+        }
+        if (drawing.kind === 'pen') {
+          if (Math.abs(drawing.width - penWidth) < 0.001) {
+            return drawing;
+          }
+          changed = true;
+          const updatedAt = ensureTimestamp();
+          return {
+            ...drawing,
+            width: penWidth,
+            meta: {
+              createdAt: drawing.meta?.createdAt ?? updatedAt,
+              updatedAt,
+            },
+          };
+        }
+        if (drawing.kind === 'arrow') {
+          if (Math.abs(drawing.width - arrowWidth) < 0.001) {
+            return drawing;
+          }
+          changed = true;
+          const updatedAt = ensureTimestamp();
+          return {
+            ...drawing,
+            width: arrowWidth,
+            meta: {
+              createdAt: drawing.meta?.createdAt ?? updatedAt,
+              updatedAt,
+            },
+          };
+        }
+        return drawing;
+      });
+
+      if (!changed) {
+        return state;
+      }
+
+      return {
+        ...state,
+        scene: {
+          ...state.scene,
+          drawings,
+        },
+      };
+    });
   }
 
   undo(): void {
@@ -1145,6 +1359,22 @@ export class App implements OnDestroy {
     this.showFieldSettings.update((value) => !value);
   }
 
+  toggleToolsPanel(): void {
+    this.showToolsPanel.update((value) => !value);
+  }
+
+  toggleAnimationPanel(): void {
+    this.showAnimationPanel.update((value) => !value);
+  }
+
+  toggleAdvancedPanel(): void {
+    this.showAdvancedPanel.update((value) => !value);
+  }
+
+  toggleExportPanel(): void {
+    this.showExportPanel.update((value) => !value);
+  }
+
   toggleTheme(): void {
     this.isDarkMode.update((value) => !value);
   }
@@ -1176,12 +1406,95 @@ export class App implements OnDestroy {
     this.engine?.draw();
   }
 
+  changeTokenScale(rawValue: string): void {
+    const parsed = Number(rawValue);
+    if (!Number.isFinite(parsed)) {
+      return;
+    }
+    const clamped = this.clamp(parsed, TOKEN_SCALE_MIN, TOKEN_SCALE_MAX);
+    if (Math.abs(clamped - this.tokenScale()) < 0.001) {
+      return;
+    }
+    this.tokenScale.set(clamped);
+  }
+
+  changeStrokeWidthFactor(rawValue: string): void {
+    const parsed = Number(rawValue);
+    if (!Number.isFinite(parsed)) {
+      return;
+    }
+    const clamped = this.clamp(parsed, STROKE_FACTOR_MIN, STROKE_FACTOR_MAX);
+    if (Math.abs(clamped - this.strokeWidthFactor()) < 0.001) {
+      return;
+    }
+    this.strokeWidthFactor.set(clamped);
+  }
+
+  changeEraserRadius(rawValue: string): void {
+    const parsed = Number(rawValue);
+    if (!Number.isFinite(parsed)) {
+      return;
+    }
+    const clamped = this.clamp(parsed, ERASER_RADIUS_MIN, ERASER_RADIUS_MAX);
+    if (Math.abs(clamped - this.eraserRadius()) < 0.001) {
+      return;
+    }
+    this.eraserRadius.set(clamped);
+  }
+
+  handleFieldWheel(event: WheelEvent): void {
+    if (!event.shiftKey) {
+      return;
+    }
+    event.preventDefault();
+    const factor = event.deltaY < 0 ? 1.1 : 1 / 1.1;
+    const next = this.clamp(
+      this.fieldZoom() * factor,
+      FIELD_ZOOM_MIN,
+      FIELD_ZOOM_MAX
+    );
+    if (Math.abs(next - this.fieldZoom()) < 0.001) {
+      return;
+    }
+    this.fieldZoom.set(next);
+  }
+
   toggleFieldFlip(): void {
     this.isFieldFlipped.update((value) => !value);
+    this.scheduleViewportSync();
   }
 
   toggleFieldRotation(): void {
     this.isFieldRotated.update((value) => !value);
+    this.scheduleViewportSync();
+  }
+
+  clearField(): void {
+    let changed = false;
+    this.applySceneUpdate((state) => {
+      if (state.scene.drawings.length === 0) {
+        return state;
+      }
+      changed = true;
+      return {
+        ...state,
+        scene: {
+          ...state.scene,
+          drawings: [],
+        },
+      };
+    });
+    if (!changed) {
+      return;
+    }
+    this.hoveredTarget.set(null);
+    this.selectedTarget.set(null);
+    this.activeDrawingHandle.set(null);
+    this.isDraggingToken.set(false);
+    this.isDraggingDrawing.set(false);
+    this.eraserPreview.set(null);
+    this.colorMenuContext.set(null);
+    this.engine?.draw();
   }
 
   setExportResolution(optionId: string): void {
@@ -1228,6 +1541,9 @@ export class App implements OnDestroy {
       const field = state.scene.field;
       const centerX = field.width / 2;
       const centerY = field.height / 2;
+      const { width: juggWidth, height: juggHeight } = this.getJuggDimensions(
+        this.tokenScale()
+      );
       const tokens = state.scene.tokens;
       const existingIndex = tokens.findIndex((token) => token.id === JUGG_ID);
       if (existingIndex >= 0) {
@@ -1239,8 +1555,8 @@ export class App implements OnDestroy {
             ...token,
             teamId: JUGG_TEAM_ID,
             shape: 'rectangle' as const,
-            width: JUGG_WIDTH,
-            height: JUGG_HEIGHT,
+            width: juggWidth,
+            height: juggHeight,
             color: token.color ?? DEFAULT_JUGG_COLOR,
             x: centerX,
             y: centerY,
@@ -1261,10 +1577,9 @@ export class App implements OnDestroy {
         y: centerY,
         color: DEFAULT_JUGG_COLOR,
         shape: 'rectangle' as const,
-        width: JUGG_WIDTH,
-        height: JUGG_HEIGHT,
-        label: 'Jugg',
-      } satisfies Token;
+        width: juggWidth,
+        height: juggHeight,
+              } satisfies Token;
       return {
         ...state,
         scene: {
@@ -1910,6 +2225,7 @@ export class App implements OnDestroy {
     ];
     engine.draw();
     this.updateCanvasCursor();
+    this.scheduleViewportSync();
   }
 
   handleViewportChange(_viewport: EngineViewport): void {
@@ -2787,8 +3103,8 @@ export class App implements OnDestroy {
     }
     const hoveredDrawingId = this.hoveredDrawingId();
     const selectedDrawingId = this.selectedDrawingId();
-    const hoveredHandle = this.hoveredLineHandle();
-    const activeHandle = this.activeLineHandle();
+    const hoveredHandle = this.hoveredDrawingHandle();
+    const activeHandle = this.activeHandleState();
     const isDraggingDrawing = this.isDraggingDrawing();
     const drawings = [...snapshot.scene.drawings];
     const drawingPriority = (drawing: Drawing): number => {
@@ -2846,6 +3162,8 @@ export class App implements OnDestroy {
         this.renderConeDrawing(ctx, drawing, {
           isSelected: drawing.id === selectedDrawingId,
           isHovered: drawing.id === hoveredDrawingId,
+          hoveredHandle,
+          activeHandle,
           isDragging: isDraggingDrawing && drawing.id === selectedDrawingId,
         });
       }
@@ -2859,7 +3177,9 @@ export class App implements OnDestroy {
       isSelected: boolean;
       isHovered: boolean;
       hoveredHandle: SelectTarget | null;
-      activeHandle: { drawingId: string; handle: 'start' | 'end' } | null;
+      activeHandle:
+        | { drawingId: string; handle: 'start' | 'end' | 'radius' }
+        | null;
       isDragging: boolean;
     }
   ): void {
@@ -2903,10 +3223,15 @@ export class App implements OnDestroy {
     const hoveredHandleId =
       options.hoveredHandle?.type === 'drawing' &&
       options.hoveredHandle.id === drawing.id
-        ? options.hoveredHandle.handle ?? null
+        ? options.hoveredHandle.handle === 'start' ||
+          options.hoveredHandle.handle === 'end'
+          ? options.hoveredHandle.handle
+          : null
         : null;
     const activeHandleId =
-      options.activeHandle?.drawingId === drawing.id
+      options.activeHandle?.drawingId === drawing.id &&
+      (options.activeHandle.handle === 'start' ||
+        options.activeHandle.handle === 'end')
         ? options.activeHandle.handle
         : null;
 
@@ -2963,7 +3288,9 @@ export class App implements OnDestroy {
       isSelected: boolean;
       isHovered: boolean;
       hoveredHandle: SelectTarget | null;
-      activeHandle: { drawingId: string; handle: 'start' | 'end' } | null;
+      activeHandle:
+        | { drawingId: string; handle: 'start' | 'end' | 'radius' }
+        | null;
       isDragging: boolean;
     }
   ): void {
@@ -3036,10 +3363,15 @@ export class App implements OnDestroy {
     const hoveredHandleId =
       options.hoveredHandle?.type === 'drawing' &&
       options.hoveredHandle.id === drawing.id
-        ? options.hoveredHandle.handle ?? null
+        ? options.hoveredHandle.handle === 'start' ||
+          options.hoveredHandle.handle === 'end'
+          ? options.hoveredHandle.handle
+          : null
         : null;
     const activeHandleId =
-      options.activeHandle?.drawingId === drawing.id
+      options.activeHandle?.drawingId === drawing.id &&
+      (options.activeHandle.handle === 'start' ||
+        options.activeHandle.handle === 'end')
         ? options.activeHandle.handle
         : null;
 
@@ -3060,7 +3392,15 @@ export class App implements OnDestroy {
   private renderConeDrawing(
     ctx: CanvasRenderingContext2D,
     drawing: ConeDrawing,
-    options: { isSelected: boolean; isHovered: boolean; isDragging: boolean }
+    options: {
+      isSelected: boolean;
+      isHovered: boolean;
+      hoveredHandle: SelectTarget | null;
+      activeHandle:
+        | { drawingId: string; handle: 'start' | 'end' | 'radius' }
+        | null;
+      isDragging: boolean;
+    }
   ): void {
     ctx.save();
     ctx.fillStyle = drawing.fill;
@@ -3089,6 +3429,21 @@ export class App implements OnDestroy {
       ctx.stroke();
       ctx.restore();
     }
+
+    if (!options.isSelected) {
+      return;
+    }
+
+    const isHovered =
+      options.hoveredHandle?.type === 'drawing' &&
+      options.hoveredHandle.id === drawing.id &&
+      options.hoveredHandle.handle === 'radius';
+    const isActive =
+      options.activeHandle?.drawingId === drawing.id &&
+      options.activeHandle.handle === 'radius';
+
+    const handlePoint = { x: drawing.at.x + drawing.radius, y: drawing.at.y };
+    this.drawHandle(ctx, handlePoint, Boolean(isHovered), Boolean(isActive));
   }
 
   private renderImageDrawing(
@@ -3237,6 +3592,13 @@ export class App implements OnDestroy {
     const selected = this.selectedTokenId();
     const isDragging = this.isDraggingToken();
     const showNames = this.showPlayerNames();
+    const scale = Math.max(
+      0.0001,
+      Math.hypot(state.fieldToCanvas.a, state.fieldToCanvas.b)
+    );
+    const scaleFactor = this.tokenScale();
+    const baseRadius = this.getTokenRadius(scaleFactor);
+    const defaultJugg = this.getJuggDimensions(scaleFactor);
 
     const tokens = [...snapshot.scene.tokens];
     const tokenPriority = (token: Token): number => {
@@ -3254,14 +3616,15 @@ export class App implements OnDestroy {
     tokens.forEach((token) => {
       const fillColor = this.getTokenFillColor(token);
       const isJugg = token.id === JUGG_ID || token.shape === 'rectangle';
+      const tokenRadius = baseRadius;
       ctx.save();
       ctx.shadowColor = 'rgba(15, 23, 42, 0.3)';
       ctx.shadowBlur = 2.8;
       ctx.fillStyle = fillColor;
 
       if (isJugg) {
-        const width = token.width ?? JUGG_WIDTH;
-        const height = token.height ?? JUGG_HEIGHT;
+        const width = token.width ?? defaultJugg.width;
+        const height = token.height ?? defaultJugg.height;
         const halfWidth = width / 2;
         const halfHeight = height / 2;
         const rectX = token.x - halfWidth;
@@ -3326,7 +3689,7 @@ export class App implements OnDestroy {
         }
       } else {
         ctx.beginPath();
-        ctx.arc(token.x, token.y, TOKEN_RADIUS, 0, Math.PI * 2);
+        ctx.arc(token.x, token.y, tokenRadius, 0, Math.PI * 2);
         ctx.fill();
 
         if (token.id === hovered || token.id === selected) {
@@ -3340,32 +3703,77 @@ export class App implements OnDestroy {
           ctx.stroke();
         }
 
-        ctx.shadowColor = 'transparent';
-        ctx.fillStyle = '#1f2937';
-        ctx.font = `${TOKEN_RADIUS * 0.8}px Inter, sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(this.getTokenLabel(token.playerId), token.x, token.y);
-
-        if (showNames) {
-          const playerName = this.getPlayerName(token.playerId);
-          if (playerName) {
-            ctx.fillStyle = '#0f172a';
-            ctx.font = `${TOKEN_RADIUS * 0.65}px Inter, sans-serif`;
-            ctx.textBaseline = 'top';
-            ctx.fillText(playerName, token.x, token.y + TOKEN_RADIUS + 0.8);
-          }
-        }
-
         if (isDragging && token.id === selected) {
           ctx.strokeStyle = 'rgba(16, 185, 129, 0.35)';
           ctx.setLineDash([1.2, 1.2]);
           ctx.lineWidth = SELECTION_OUTLINE_EXTRA * 0.25;
           ctx.beginPath();
-          ctx.arc(token.x, token.y, TOKEN_RADIUS + 1.1, 0, Math.PI * 2);
+          ctx.arc(token.x, token.y, tokenRadius + 1.1, 0, Math.PI * 2);
           ctx.stroke();
         }
       }
+
+      ctx.restore();
+
+      if (isJugg) {
+        return;
+      }
+
+      const canvasPoint = matrixApplyToPoint(state.fieldToCanvas, {
+        x: token.x,
+        y: token.y,
+      });
+      const deviceRadius = tokenRadius * scale;
+      const tokenLabel = token.label ?? this.getTokenLabel(token.playerId);
+      const playerName = showNames ? this.getPlayerName(token.playerId) : null;
+
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.shadowColor = 'transparent';
+      ctx.textAlign = 'center';
+
+      const numberFontSize = Math.max(12, deviceRadius * 0.8);
+      ctx.fillStyle = '#1f2937';
+      ctx.font = `${numberFontSize}px Inter, sans-serif`;
+      ctx.textBaseline = 'middle';
+      ctx.fillText(tokenLabel, canvasPoint.x, canvasPoint.y);
+
+      if (playerName) {
+        const trimmed = playerName.trim();
+        if (trimmed) {
+          const nameFontSize = Math.max(10, deviceRadius * 0.55);
+          ctx.font = `${nameFontSize}px Inter, sans-serif`;
+          ctx.textBaseline = 'top';
+          const metrics = ctx.measureText(trimmed);
+          const textWidth = metrics.width;
+          const ascent = metrics.actualBoundingBoxAscent ?? nameFontSize;
+          const descent = metrics.actualBoundingBoxDescent ?? nameFontSize * 0.25;
+          const textHeight = ascent + descent;
+          const paddingX = Math.max(6, deviceRadius * 0.25);
+          const paddingY = Math.max(3, nameFontSize * 0.35);
+          const offsetY = deviceRadius + paddingY * 2;
+          const rectWidth = textWidth + paddingX * 2;
+          const rectHeight = textHeight + paddingY * 2;
+          const rectX = canvasPoint.x - rectWidth / 2;
+          const rectY = canvasPoint.y + offsetY;
+          const corner = Math.min(paddingY * 1.8, 12);
+
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+          this.traceRoundedRect(
+            ctx,
+            rectX,
+            rectY,
+            rectWidth,
+            rectHeight,
+            corner
+          );
+          ctx.fill();
+
+          ctx.fillStyle = '#f8fafc';
+          ctx.fillText(trimmed, canvasPoint.x, rectY + paddingY);
+        }
+      }
+
       ctx.restore();
     });
   }
@@ -3381,7 +3789,7 @@ export class App implements OnDestroy {
     if (!preview) {
       return;
     }
-    const radius = this.getEraserRadius(this.selectedEraserSize());
+    const radius = this.eraserRadius();
     ctx.save();
     ctx.setLineDash([1.8, 1.6]);
     ctx.lineWidth = 0.6;
@@ -3452,6 +3860,16 @@ export class App implements OnDestroy {
 
   private getJuggCornerRadius(width: number, height: number): number {
     return Math.min(width, height) * JUGG_CORNER_RATIO;
+  }
+
+  private getTokenRadius(scale = this.tokenScale()): number {
+    return TOKEN_BASE_RADIUS * scale;
+  }
+
+  private getJuggDimensions(
+    scale = this.tokenScale()
+  ): { width: number; height: number } {
+    return { width: JUGG_WIDTH * scale, height: JUGG_HEIGHT * scale };
   }
 
   private getTokenFillColor(token: Token): string {
@@ -3617,7 +4035,20 @@ export class App implements OnDestroy {
     const expectedTimestamp = snapshotCopy.scene.lastUpdatedAt;
     const handle = window.setTimeout(async () => {
       this.pendingPreviewTimers.delete(sceneId);
-      const dataUrl = await this.renderScenePreview(snapshotCopy);
+      let dataUrl: string | null = null;
+      if (sceneId === this.activeSceneId() && this.engine) {
+        try {
+          dataUrl = this.engine.canvas.toDataURL('image/png');
+        } catch {
+          dataUrl = null;
+        }
+      }
+      if (!dataUrl) {
+        dataUrl = await this.renderScenePreview(snapshotCopy);
+      }
+      if (!dataUrl) {
+        return;
+      }
       this.sceneDeck.update((entries) => {
         const index = entries.findIndex((entry) => entry.id === sceneId);
         if (index < 0) {
@@ -4107,6 +4538,16 @@ export class App implements OnDestroy {
     } catch {
       return false;
     }
+  }
+
+  private scheduleViewportSync(): void {
+    if (typeof window === 'undefined') {
+      this.viewportSyncToken.update((value) => value + 1);
+      return;
+    }
+    window.requestAnimationFrame(() => {
+      this.viewportSyncToken.update((value) => value + 1);
+    });
   }
 
   @HostListener('window:keydown', ['$event'])

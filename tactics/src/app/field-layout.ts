@@ -79,6 +79,22 @@ export const JUGGER_FIELD_LAYOUT: FieldLayoutDefinition = {
         { x: 50, y: 55.5 },
       ],
     },
+    {
+      id: 'male-left-circle',
+      kind: 'circle',
+      stroke: 'rgba(248, 250, 252, 0.7)',
+      strokeWidth: 0.7,
+      radius: 3,
+      center: { x: 10, y: 50 },
+    },
+    {
+      id: 'male-right-circle',
+      kind: 'circle',
+      stroke: 'rgba(248, 250, 252, 0.7)',
+      strokeWidth: 0.7,
+      radius: 3,
+      center: { x: 90, y: 50 },
+    },
   ],
 };
 

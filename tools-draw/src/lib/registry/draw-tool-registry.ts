@@ -31,7 +31,7 @@ export type SelectTarget =
   | {
       type: 'drawing';
       id: string;
-      handle?: 'start' | 'end';
+      handle?: 'start' | 'end' | 'radius';
       action?: 'delete';
     };
 
@@ -253,6 +253,10 @@ type DragState =
       mode: 'cone';
       drawingId: string;
       offset: { dx: number; dy: number };
+    }
+  | {
+      mode: 'cone-radius';
+      drawingId: string;
     };
 
 class SelectTool implements DrawTool {
@@ -263,6 +267,17 @@ class SelectTool implements DrawTool {
   private hovered?: SelectTarget;
   private selected?: SelectTarget;
   private dragState?: DragState;
+  private tokenRadius = TOKEN_HIT_RADIUS;
+
+  configure(config: unknown): void {
+    if (!config || typeof config !== 'object') {
+      return;
+    }
+    const maybe = config as { tokenRadius?: unknown };
+    if (typeof maybe.tokenRadius === 'number' && Number.isFinite(maybe.tokenRadius)) {
+      this.tokenRadius = Math.max(0.5, maybe.tokenRadius);
+    }
+  }
 
   handlePointer(context: PointerContext, runtime: DrawToolRuntime): void {
     const scene = runtime.scene;
@@ -353,7 +368,10 @@ class SelectTool implements DrawTool {
       const baseSelection: SelectTarget = { type: 'drawing', id: target.id };
       const drawing = this.findDrawingById(scene.scene.drawings, target.id);
 
-      if (target.handle && drawing?.kind === 'line') {
+      if (
+        (target.handle === 'start' || target.handle === 'end') &&
+        drawing?.kind === 'line'
+      ) {
         this.dragState = {
           mode: 'line-handle',
           drawingId: target.id,
@@ -367,11 +385,27 @@ class SelectTool implements DrawTool {
         return;
       }
 
-      if (target.handle && drawing?.kind === 'arrow') {
+      if (
+        (target.handle === 'start' || target.handle === 'end') &&
+        drawing?.kind === 'arrow'
+      ) {
         this.dragState = {
           mode: 'arrow-handle',
           drawingId: target.id,
           handle: target.handle,
+        };
+        this.selected = baseSelection;
+        runtime.emit({
+          context,
+          data: { kind: 'select', target: baseSelection },
+        });
+        return;
+      }
+
+      if (target.handle === 'radius' && drawing?.kind === 'cone') {
+        this.dragState = {
+          mode: 'cone-radius',
+          drawingId: target.id,
         };
         this.selected = baseSelection;
         runtime.emit({
@@ -622,6 +656,39 @@ class SelectTool implements DrawTool {
       runtime.emit({ context, data: { kind: 'drag', target } });
       return;
     }
+
+    if (state.mode === 'cone-radius') {
+      const target: SelectTarget = {
+        type: 'drawing',
+        id: state.drawingId,
+        handle: 'radius',
+      };
+      runtime.updateScene((snapshot) => ({
+        ...snapshot,
+        scene: {
+          ...snapshot.scene,
+          drawings: snapshot.scene.drawings.map((drawing) => {
+            if (drawing.id !== state.drawingId || drawing.kind !== 'cone') {
+              return drawing;
+            }
+            const radius = Math.max(
+              0.5,
+              distance(drawing.at, {
+                x: context.fieldPoint.x,
+                y: context.fieldPoint.y,
+              })
+            );
+            return {
+              ...drawing,
+              radius,
+              meta: touchDrawingMeta(drawing.meta),
+            };
+          }),
+        },
+      }));
+      runtime.emit({ context, data: { kind: 'drag', target } });
+      return;
+    }
   }
 
   private handleUp(context: PointerContext, runtime: DrawToolRuntime): void {
@@ -762,19 +829,39 @@ class SelectTool implements DrawTool {
   ): SelectTarget | undefined {
     const preferredId =
       preferred?.type === 'drawing' ? preferred.id : undefined;
-    if (!preferredId) {
-      return undefined;
-    }
-    for (let index = drawings.length - 1; index >= 0; index -= 1) {
-      const drawing = drawings[index];
-      if (drawing.id !== preferredId) {
-        continue;
-      }
+
+    const checkDrawing = (drawing: Drawing): SelectTarget | undefined => {
       if (drawing.kind === 'line' && drawing.points.length > 0) {
         return this.hitHandlesForLine(drawing, x, y);
       }
       if (drawing.kind === 'arrow') {
         return this.hitHandlesForArrow(drawing, x, y);
+      }
+      if (drawing.kind === 'cone') {
+        return this.hitHandlesForCone(drawing, x, y);
+      }
+      return undefined;
+    };
+
+    if (preferredId) {
+      for (let index = drawings.length - 1; index >= 0; index -= 1) {
+        const drawing = drawings[index];
+        if (drawing.id !== preferredId) {
+          continue;
+        }
+        const target = checkDrawing(drawing);
+        if (target) {
+          return target;
+        }
+        break;
+      }
+    }
+
+    for (let index = drawings.length - 1; index >= 0; index -= 1) {
+      const drawing = drawings[index];
+      const target = checkDrawing(drawing);
+      if (target) {
+        return target;
       }
     }
     return undefined;
@@ -805,6 +892,18 @@ class SelectTool implements DrawTool {
     }
     if (distance(drawing.to, { x, y }) <= LINE_HANDLE_RADIUS) {
       return { type: 'drawing', id: drawing.id, handle: 'end' };
+    }
+    return undefined;
+  }
+
+  private hitHandlesForCone(
+    drawing: Drawing & { kind: 'cone' },
+    x: number,
+    y: number
+  ): SelectTarget | undefined {
+    const handlePoint = { x: drawing.at.x + drawing.radius, y: drawing.at.y };
+    if (distance(handlePoint, { x, y }) <= LINE_HANDLE_RADIUS) {
+      return { type: 'drawing', id: drawing.id, handle: 'radius' };
     }
     return undefined;
   }
@@ -869,7 +968,7 @@ class SelectTool implements DrawTool {
         continue;
       }
       const dist = distance(token, { x, y });
-      if (dist <= TOKEN_HIT_RADIUS && dist < bestDistance) {
+      if (dist <= this.tokenRadius && dist < bestDistance) {
         bestDistance = dist;
         closest = token;
       }
@@ -1407,6 +1506,7 @@ class ArrowTool implements DrawTool {
   readonly label = 'Arrow';
   readonly description = 'Richtungs-Pfeile platzieren oder bearbeiten.';
   private color = '#facc15';
+  private width = 2.5 * VISUAL_SCALE;
   private selectedId?: string;
   private hovered?: SelectTarget;
 
@@ -1491,7 +1591,7 @@ class ArrowTool implements DrawTool {
               from: start,
               to: start,
               stroke: this.color,
-              width: 2.5 * VISUAL_SCALE,
+              width: this.width,
               meta: newDrawingMeta(),
             },
           ],
@@ -1643,9 +1743,12 @@ class ArrowTool implements DrawTool {
     if (!config || typeof config !== 'object') {
       return;
     }
-    const maybe = config as { color?: unknown };
+    const maybe = config as { color?: unknown; width?: unknown };
     if (typeof maybe.color === 'string') {
       this.color = maybe.color;
+    }
+    if (typeof maybe.width === 'number' && Number.isFinite(maybe.width)) {
+      this.width = Math.max(0.5, Math.min(maybe.width, 12));
     }
   }
 
@@ -1939,14 +2042,8 @@ class EraserTool implements DrawTool {
     drawing: Drawing,
     point: { x: number; y: number }
   ): Drawing[] {
-    if (drawing.kind === 'line') {
-      return this.trimLineDrawing(drawing, point);
-    }
     if (drawing.kind === 'pen') {
       return this.trimPenDrawing(drawing, point);
-    }
-    if (drawing.kind === 'arrow') {
-      return this.trimArrowDrawing(drawing, point);
     }
     return [drawing];
   }
