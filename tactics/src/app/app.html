@@ -35,411 +35,613 @@
       class="page__main-row"
       [class.page__main-row--flipped]="isFieldFlipped()"
     >
-      <aside class="team-panel team-panel--left">
+      <aside
+        class="team-panel team-panel--left"
+        [class.team-panel--collapsed]="isTeamPanelCollapsed('left')"
+      >
         <header class="team-panel__header">
-          <div class="team-panel__startRow">
-            <h2 class="" tea>{{ leftTeam.name }}</h2>
-            <div class="team-panel__info"></div>
-        </div>
-        <div class="team-panel__teamBrand">
-          <img class="team-panel__avatar" aria-hidden="true" />
-          <div class="team-panel__actions">
-            <button type="button">Color 1</button>
-            <button type="button">Color 2</button>
-          </div>
-        </div>
-      </header>
-
-      <ul class="player-list">
-        <li
-          *ngFor="let player of leftPlayers()"
-          class="player-card"
-          draggable="true"
-          (dragstart)="onDragStart($event, player, leftTeam)"
-          [class.player-card--active]="playerTokenId(player) === selectedTokenId()"
-          [class.player-card--hover]="playerTokenId(player) === hoveredTokenId()"
-        >
-          <span class="player-card__number">{{ player.number ?? '—' }}</span>
-          <div class="player-card__details">
-            <span class="player-card__name">{{ player.name }}</span>
-            <span class="player-card__role">{{ player.role }}</span>
-          </div>
-        </li>
-      </ul>
-    </aside>
-
-    <section
-      class="field-area"
-      (dragover)="allowDrop($event)"
-      [class.field-area--rotated]="isFieldRotated()"
-      (drop)="handleDrop($event)"
-    >
-      <div class="field-area__surface" (wheel)="handleFieldWheel($event)">
-        <div class="field-surface__controls">
           <button
             type="button"
-            class="field-surface__button"
-            (click)="toggleFieldRotation()"
-            [attr.aria-pressed]="isFieldRotated()"
-            aria-label="Feld um 90° drehen"
+            class="team-panel__collapse"
+            (click)="toggleTeamPanel('left')"
+            [attr.aria-expanded]="!isTeamPanelCollapsed('left')"
+            aria-controls="left-team-panel"
           >
-            ⟳
+            <span class="team-panel__collapse-icon" aria-hidden="true"></span>
+            <span class="sr-only">
+              {{ isTeamPanelCollapsed('left') ? 'Team oeffnen' : 'Team einklappen' }}
+            </span>
           </button>
-          <button
-            type="button"
-            class="field-surface__button field-surface__button--clear"
-            (click)="clearField()"
-            aria-label="Feld löschen"
-            title="Feld löschen"
-          >
-            🗑
-          </button>
-        </div>
-        <jugger-field
-          class="field-component"
-          [scene]="scene()"
-          [flipHorizontal]="isFieldFlipped()"
-          [rotateQuarterTurn]="isFieldRotated()"
-          [style.aspect-ratio]="fieldAspectRatio()"
-          [zoom]="fieldZoom()"
-          [viewportSync]="viewportSyncToken()"
-          (engineReady)="handleEngineReady($event)"
-          (viewportChange)="handleViewportChange($event)"
-          (pointerDown)="handlePointer($event)"
-          (pointerMove)="handlePointer($event)"
-          (pointerUp)="handlePointer($event)"
-          (pointerCancel)="handlePointer($event)"
-        ></jugger-field>
-      </div>
 
-      <div class="page__stack">
-        <div class="field-status">
-          <ng-container *ngIf="selectedStatus() as selection; else fieldStatusTool">
-            <div class="field-status__section field-status__primary field-status__selection">
-              <div class="field-status__info">
-                <span class="field-status__label">Auswahl</span>
-                <span class="field-status__value">{{ selection.label }}</span>
-              </div>
-              <div class="field-status__actions">
-                <div class="field-status__colors" *ngIf="selection.supportsColor">
-                  <button
-                    type="button"
-                    class="field-status__color-button"
-                    [style.background-color]="selection.color ?? '#f8fafc'"
-                    (click)="toggleColorMenu('selection')"
-                    aria-label="Farbe ändern"
-                  >
-                    <span class="sr-only">Aktuelle Farbe ändern</span>
-                  </button>
-                  <div
-                    class="field-status__color-menu"
-                    *ngIf="isSelectionColorMenuOpen()"
-                  >
-                    <div class="field-status__swatches">
-                      <button
-                        type="button"
-                        *ngFor="let color of selection.palette"
-                        class="field-status__swatch"
-                        [class.field-status__swatch--active]="selection.color && selection.color.toLowerCase() === color.toLowerCase()"
-                        [style.background-color]="color"
-                        (click)="applySelectedColor(color)"
-                        [attr.aria-label]="'Farbe ' + color"
-                      ></button>
-                    </div>
-                    <label class="field-status__custom">
-                      Eigene Farbe
-                      <input
-                        type="color"
-                        [value]="selection.color || '#ffffff'"
-                        (input)="applyCustomColor($event, 'selection')"
-                      />
-                    </label>
-                  </div>
-                </div>
+          <div class="team-panel__header-content">
+            <button
+              type="button"
+              class="team-panel__logo-button"
+              (click)="onTeamLogoClick($event, 'left', leftLogoInput)"
+              [attr.aria-label]="leftTeamConfig().logoDataUrl ? 'Teamlogo entfernen' : 'Teamlogo waehlen'"
+            >
+              <ng-container *ngIf="leftTeamConfig().logoDataUrl as logo; else leftLogoPlaceholder">
+                <img [src]="logo" alt="Team Logo" />
+              </ng-container>
+            </button>
+            <ng-template #leftLogoPlaceholder>
+              <span>Logo</span>
+            </ng-template>
+            <input
+              #leftLogoInput
+              class="sr-only"
+              type="file"
+              accept="image/*"
+              (change)="handleTeamLogoSelected('left', $any($event.target).files)"
+            />
+
+            <div class="team-panel__header-info">
+              <div class="team-panel__name-wrapper">
                 <button
                   type="button"
-                  class="field-status__delete"
-                  (click)="deleteSelectedElement()"
-                  aria-label="Auswahl entfernen"
+                  class="team-panel__name-display"
+                  [class.team-panel__name-display--hidden]="editingTeamName() === 'left'"
+                  (click)="beginEditTeamName('left')"
                 >
-                  ×
+                  {{ leftTeamConfig().name }}
                 </button>
-              </div>
-              <label
-                *ngIf="selection.type === 'token'"
-                class="field-status__slider"
-              >
-                <span>
-                  Token-Größe
-                  <small>{{ tokenScaleLabel() }}</small>
-                </span>
                 <input
-                  #tokenSizeSelection
-                  type="range"
-                  [min]="tokenScaleMin"
-                  [max]="tokenScaleMax"
-                  step="0.05"
-                  [value]="tokenScale()"
-                  (input)="changeTokenScale(tokenSizeSelection.value)"
+                  *ngIf="editingTeamName() === 'left'"
+                  type="text"
+                  class="team-panel__name-input"
+                  data-team-name-input="left"
+                  [value]="teamNameDraft().left"
+                  (input)="onTeamNameDraft('left', $any($event.target).value)"
+                  (blur)="finishTeamNameEdit('left')"
+                  (keydown.enter)="finishTeamNameEdit('left')"
+                  (keydown.escape)="cancelTeamNameEdit('left')"
                 />
-              </label>
-            </div>
-          </ng-container>
-          <ng-template #fieldStatusTool>
-            <ng-container *ngIf="toolStatus() as tool">
-              <div class="field-status__section field-status__primary field-status__tool">
-                <div class="field-status__info">
-                  <span class="field-status__label">Tool</span>
-                  <span class="field-status__value">{{ tool.label }}</span>
-                </div>
-                <div class="field-status__tool-content" [ngSwitch]="tool.kind">
-                  <div *ngSwitchCase="'pen'">
-                    <div class="field-status__actions">
-                      <div class="field-status__colors">
-                        <button
-                          type="button"
-                          class="field-status__color-button"
-                          [style.background-color]="tool.color"
-                          (click)="toggleColorMenu('pen')"
-                          aria-label="Stiftfarbe ändern"
-                        >
-                          <span class="sr-only">Stiftfarbe ändern</span>
-                        </button>
-                        <div
-                          class="field-status__color-menu"
-                          *ngIf="openToolColorMenu() === 'pen'"
-                        >
-                          <div class="field-status__swatches">
-                            <button
-                              type="button"
-                              *ngFor="let color of tool.palette || []"
-                              class="field-status__swatch"
-                              [class.field-status__swatch--active]="tool.color && tool.color.toLowerCase() === color.toLowerCase()"
-                              [style.background-color]="color"
-                              (click)="applyToolColor('pen', color)"
-                              [attr.aria-label]="'Farbe ' + color"
-                            ></button>
-                          </div>
-                          <label class="field-status__custom">
-                            Eigene Farbe
-                            <input
-                              type="color"
-                              [value]="tool.color || '#ffffff'"
-                              (input)="applyCustomColor($event, 'pen')"
-                            />
-                          </label>
-                        </div>
-                      </div>
-                    </div>
-                    <label class="field-status__slider">
-                      <span>
-                        Strichstärke
-                        <small>{{ strokeWidthFactorLabel() }}</small>
-                      </span>
-                      <input
-                        #penWidthSlider
-                        type="range"
-                        [min]="strokeFactorMin"
-                        [max]="strokeFactorMax"
-                        step="0.05"
-                        [value]="strokeWidthFactor()"
-                        (input)="changeStrokeWidthFactor(penWidthSlider.value)"
-                      />
-                    </label>
-                  </div>
-
-                  <div *ngSwitchCase="'arrow'">
-                    <div class="field-status__actions">
-                      <div class="field-status__colors">
-                        <button
-                          type="button"
-                          class="field-status__color-button"
-                          [style.background-color]="tool.color"
-                          (click)="toggleColorMenu('arrow')"
-                          aria-label="Pfeilfarbe ändern"
-                        >
-                          <span class="sr-only">Pfeilfarbe ändern</span>
-                        </button>
-                        <div
-                          class="field-status__color-menu"
-                          *ngIf="openToolColorMenu() === 'arrow'"
-                        >
-                          <div class="field-status__swatches">
-                            <button
-                              type="button"
-                              *ngFor="let color of tool.palette || []"
-                              class="field-status__swatch"
-                              [class.field-status__swatch--active]="tool.color && tool.color.toLowerCase() === color.toLowerCase()"
-                              [style.background-color]="color"
-                              (click)="applyToolColor('arrow', color)"
-                              [attr.aria-label]="'Farbe ' + color"
-                            ></button>
-                          </div>
-                          <label class="field-status__custom">
-                            Eigene Farbe
-                            <input
-                              type="color"
-                              [value]="tool.color || '#ffffff'"
-                              (input)="applyCustomColor($event, 'arrow')"
-                            />
-                          </label>
-                        </div>
-                      </div>
-                    </div>
-                    <label class="field-status__slider">
-                      <span>
-                        Strichstärke
-                        <small>{{ strokeWidthFactorLabel() }}</small>
-                      </span>
-                      <input
-                        #arrowWidthSlider
-                        type="range"
-                        [min]="strokeFactorMin"
-                        [max]="strokeFactorMax"
-                        step="0.05"
-                        [value]="strokeWidthFactor()"
-                        (input)="changeStrokeWidthFactor(arrowWidthSlider.value)"
-                      />
-                    </label>
-                  </div>
-
-                  <div *ngSwitchCase="'eraser'">
-                    <label class="field-status__slider">
-                      <span>
-                        Radius
-                        <small>{{ eraserRadiusLabel() }}</small>
-                      </span>
-                      <input
-                        #eraserRadiusSlider
-                        type="range"
-                        [min]="eraserRadiusMin"
-                        [max]="eraserRadiusMax"
-                        step="1"
-                        [value]="eraserRadius()"
-                        (input)="changeEraserRadius(eraserRadiusSlider.value)"
-                      />
-                    </label>
-                  </div>
-                </div>
               </div>
-            </ng-container>
-          </ng-template>
 
-          <!-- field controls moved to canvas surface -->
-        </div>
-
-        <section
-          class="collapsible collapsible--tools"
-          [class.collapsible--open]="showToolsPanel()"
-        >
-          <button
-            type="button"
-            class="collapsible__header"
-            (click)="toggleToolsPanel()"
-            [attr.aria-expanded]="showToolsPanel()"
-          >
-            <span class="collapsible__label">Werkzeuge</span>
-            <span
-              class="collapsible__chevron"
-              [class.collapsible__chevron--open]="showToolsPanel()"
-              aria-hidden="true"
-            >
-              ▾
-            </span>
-          </button>
-          <div class="collapsible__body" *ngIf="showToolsPanel()">
-            <div class="tool-buttons">
-              <div class="tool-buttons__item" *ngFor="let tool of toolShortcuts">
-                <span
-                  class="tool-buttons__shortcut"
-                  [class.tool-buttons__shortcut--active]="tool.id === selectedTool()"
-                >
-                  {{ tool.shortcut }}
-                </span>
-                <button
-                  type="button"
-                  class="tool-button"
-                  [class.tool-button--active]="tool.id === selectedTool()"
-                  (click)="selectTool(tool.id)"
-                >
-                  <span class="tool-button__label">{{ tool.label }}</span>
-                </button>
+              <div class="team-panel__color-row">
+                <label class="team-panel__color-field">
+                  <span>Farbe 1</span>
+                  <input
+                    type="color"
+                    [value]="leftTeamConfig().colors.primary"
+                    (input)="updateTeamColor('left', 'primary', $any($event.target).value)"
+                  />
+                </label>
+                <label class="team-panel__color-field">
+                  <span>Farbe 2</span>
+                  <input
+                    type="color"
+                    [value]="leftTeamConfig().colors.secondary"
+                    (input)="updateTeamColor('left', 'secondary', $any($event.target).value)"
+                  />
+                </label>
               </div>
             </div>
           </div>
-        </section>
+        </header>
 
-        <section
-          class="collapsible collapsible--animation"
-          [class.collapsible--open]="showAnimationPanel()"
+        <div
+          class="team-panel__body"
+          id="left-team-panel"
+          *ngIf="!isTeamPanelCollapsed('left')"
         >
-          <button
-            type="button"
-            class="collapsible__header"
-            (click)="toggleAnimationPanel()"
-            [attr.aria-expanded]="showAnimationPanel()"
+          <div
+            class="team-panel__new-player"
+            (dragover)="allowPompfenDrop($event)"
+            (drop)="handlePompfenDropOnDraft($event, 'left')"
           >
-            <span class="collapsible__label">Animation</span>
-            <span
-              class="collapsible__chevron"
-              [class.collapsible__chevron--open]="showAnimationPanel()"
-              aria-hidden="true"
+            <button
+              type="button"
+              class="team-panel__new-player-icon"
+              (click)="openPompfenPickerForDraft('left')"
+              (dragover)="allowPompfenDrop($event)"
+              (drop)="handlePompfenDropOnDraft($event, 'left')"
+              [attr.aria-label]="draftPlayers().left.pompfenId ? 'Pompfe aendern' : 'Pompfe waehlen'"
             >
-              ▾
-            </span>
-          </button>
-          <div class="collapsible__body" *ngIf="showAnimationPanel()">
-            <div class="scene-strip" role="tablist" aria-label="Szenen">
-              <div class="scene-strip__list">
-                <div
-                  class="scene-strip__item"
-                  *ngFor="let item of scenes(); trackBy: trackScene"
-                  [class.scene-strip__item--active]="item.id === activeSceneIdValue()"
+              <ng-container *ngIf="draftPlayers().left.pompfenId as draftPompfen; else leftDraftIconPlaceholder">
+                <img [src]="getPompfenIcon(draftPompfen) || ''" [alt]="getPompfenTitle(draftPompfen) || 'Pompfe'" />
+              </ng-container>
+            </button>
+            <ng-template #leftDraftIconPlaceholder>
+              <span>+</span>
+            </ng-template>
+
+            <div class="team-panel__new-player-fields">
+              <input
+                type="text"
+                class="team-panel__new-player-input"
+                placeholder="Spieler hinzufuegen"
+                autocomplete="off"
+                [value]="draftPlayers().left.name"
+                (input)="updateDraftName('left', $any($event.target).value)"
+                (keydown.enter)="addPlayerFromDraft('left')"
+              />
+              <small>
+                {{ draftPlayers().left.pompfenId ? getPompfenTitle(draftPlayers().left.pompfenId) : 'Pompfe waehlen' }}
+              </small>
+            </div>
+
+            <button
+              type="button"
+              class="team-panel__new-player-submit"
+              (click)="addPlayerFromDraft('left')"
+              [disabled]="!draftPlayers().left.name.trim().length"
+            >
+              Hinzufuegen
+            </button>
+          </div>
+
+          <ul class="player-list">
+            <li
+              *ngFor="let player of leftPlayers(); trackBy: trackPlayer"
+              class="player-card"
+              draggable="true"
+              (dragstart)="onDragStart($event, player, leftTeam())"
+              (dragover)="allowPompfenDrop($event)"
+              (drop)="handlePompfenDropOnPlayer($event, 'left', player.id)"
+              [class.player-card--active]="playerTokenId(player) === selectedTokenId()"
+              [class.player-card--hover]="playerTokenId(player) === hoveredTokenId()"
+            >
+              <div class="player-card__main">
+                <button
+                  type="button"
+                  class="player-card__icon-button"
+                  (click)="openPompfenPickerForPlayer('left', player.id)"
+                  (dragover)="allowPompfenDrop($event)"
+                  (drop)="handlePompfenDropOnPlayer($event, 'left', player.id)"
+                  [attr.aria-label]="getPompfenTitle(player.pompfenId) ? 'Pompfe aendern' : 'Pompfe waehlen'"
                 >
-                  <button
-                    type="button"
-                    class="scene-strip__select"
-                    (click)="activateScene(item.id)"
-                    role="tab"
-                    [attr.aria-selected]="item.id === activeSceneIdValue()"
+                  <ng-container *ngIf="getPompfenIcon(player.pompfenId) as icon; else leftPlayerIconPlaceholder">
+                    <img [src]="icon" [alt]="getPompfenTitle(player.pompfenId) || player.name" />
+                  </ng-container>
+                </button>
+                <ng-template #leftPlayerIconPlaceholder>
+                  <span>?</span>
+                </ng-template>
+
+                <div class="player-card__text">
+                  <input
+                    *ngIf="isEditingPlayer('left', player.id); else leftPlayerNameDisplay"
+                    type="text"
+                    class="player-card__input player-card__input--editing"
+                    autocomplete="off"
+                    [value]="player.name"
+                    (input)="updatePlayerName('left', player.id, $any($event.target).value)"
+                    (blur)="finishPlayerEdit('left', player.id)"
+                    (keydown.enter)="finishPlayerEdit('left', player.id)"
+                    (keydown.escape)="cancelPlayerEdit()"
+                  />
+                  <ng-template #leftPlayerNameDisplay>
+                    <button
+                      type="button"
+                      class="player-card__name-button"
+                      (click)="startEditingPlayer('left', player.id)"
+                    >
+                      {{ player.name }}
+                    </button>
+                  </ng-template>
+                  <span class="player-card__role">
+                    {{ getPompfenTitle(player.pompfenId) || 'Keine Pompfe' }}
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                class="player-card__remove"
+                (click)="removePlayer('left', player.id)"
+              >
+                &times;
+              </button>
+            </li>
+          </ul>
+
+          <div class="team-panel__footer">
+            <button type="button" (click)="showTeamLoadDialog('left')">Team laden</button>
+            <button type="button" (click)="exportTeam('left')">Team exportieren</button>
+          </div>
+        </div>
+      </aside>
+
+      <section
+        class="field-area"
+        (dragover)="allowDrop($event)"
+        [class.field-area--rotated]="isFieldRotated()"
+        (drop)="handleDrop($event)"
+      >
+        <div class="field-area__surface" (wheel)="handleFieldWheel($event)">
+          <div class="field-surface__controls">
+            <button
+              type="button"
+              class="field-surface__button"
+              (click)="toggleFieldRotation()"
+              [attr.aria-pressed]="isFieldRotated()"
+              aria-label="Feld um 90° drehen"
+            >
+              ⟳
+            </button>
+            <button
+              type="button"
+              class="field-surface__button field-surface__button--clear"
+              (click)="clearField()"
+              aria-label="Feld löschen"
+              title="Feld löschen"
+            >
+              🗑
+            </button>
+          </div>
+          <jugger-field
+            class="field-component"
+            [scene]="scene()"
+            [flipHorizontal]="isFieldFlipped()"
+            [rotateQuarterTurn]="isFieldRotated()"
+            [style.aspect-ratio]="fieldAspectRatio()"
+            [zoom]="fieldZoom()"
+            [viewportSync]="viewportSyncToken()"
+            (engineReady)="handleEngineReady($event)"
+            (viewportChange)="handleViewportChange($event)"
+            (pointerDown)="handlePointer($event)"
+            (pointerMove)="handlePointer($event)"
+            (pointerUp)="handlePointer($event)"
+            (pointerCancel)="handlePointer($event)"
+          ></jugger-field>
+        </div>
+
+        <div class="page__stack">
+          <div class="field-status">
+            <ng-container
+              *ngIf="selectedStatus() as selection; else fieldStatusTool"
+            >
+              <div
+                class="field-status__section field-status__primary field-status__selection"
+              >
+                <div class="field-status__info">
+                  <span class="field-status__label">Auswahl</span>
+                </div>
+                <div class="field-status__actions">
+                  <div
+                    class="field-status__colors"
+                    *ngIf="selection.supportsColor"
                   >
+                    <span class="field-status__value"
+                      >{{ selection.label }}</span
+                    >
+
+                    <button
+                      type="button"
+                      class="field-status__color-button"
+                      [style.background-color]="selection.color ?? '#f8fafc'"
+                      (click)="toggleColorMenu('selection')"
+                      aria-label="Farbe ändern"
+                    >
+                      <span class="sr-only">Aktuelle Farbe ändern</span>
+                    </button>
                     <div
-                      class="scene-strip__thumbnail"
-                      [class.scene-strip__thumbnail--empty]="!item.previewDataUrl"
-                      [style.background-image]="item.previewDataUrl ? 'url(' + item.previewDataUrl + ')' : ''"
-                    ></div>
-                    <div class="scene-strip__meta">
-                      <span class="scene-strip__label">{{ item.label }}</span>
-                      <span class="scene-strip__time"
-                        >{{ item.updatedAt | date: 'HH:mm' }}</span
-                      >
+                      class="field-status__color-menu"
+                      *ngIf="isSelectionColorMenuOpen()"
+                    >
+                      <div class="field-status__swatches">
+                        <button
+                          type="button"
+                          *ngFor="let color of selection.palette"
+                          class="field-status__swatch"
+                          [class.field-status__swatch--active]="selection.color && selection.color.toLowerCase() === color.toLowerCase()"
+                          [style.background-color]="color"
+                          (click)="applySelectedColor(color)"
+                          [attr.aria-label]="'Farbe ' + color"
+                        ></button>
+                      </div>
+                      <label class="field-status__custom">
+                        Eigene Farbe
+                        <input
+                          type="color"
+                          [value]="selection.color || '#ffffff'"
+                          (input)="applyCustomColor($event, 'selection')"
+                        />
+                      </label>
                     </div>
-                  </button>
+                  </div>
                   <button
                     type="button"
-                    class="scene-strip__delete"
-                    (click)="deleteScene(item.id); $event.stopPropagation()"
-                    [disabled]="scenes().length <= 1"
-                    aria-label="Szene entfernen"
-                    title="Szene entfernen"
+                    class="field-status__delete"
+                    (click)="deleteSelectedElement()"
+                    aria-label="Auswahl entfernen"
                   >
                     ×
                   </button>
                 </div>
+                <label
+                  *ngIf="selection.type === 'token'"
+                  class="field-status__slider"
+                >
+                  <span>
+                    Token-Größe
+                    <small>{{ tokenScaleLabel() }}</small>
+                  </span>
+                  <input
+                    #tokenSizeSelection
+                    type="range"
+                    [min]="tokenScaleMin"
+                    [max]="tokenScaleMax"
+                    step="0.05"
+                    [value]="tokenScale()"
+                    (input)="changeTokenScale(tokenSizeSelection.value)"
+                  />
+                </label>
               </div>
-              <button
-                type="button"
-                class="scene-strip__add"
-                (click)="addScene()"
-                aria-label="Neue Szene hinzufügen"
-              >
-                <span aria-hidden="true">+</span>
-              </button>
-            </div>
-          </div>
-        </section>
+            </ng-container>
+            <ng-template #fieldStatusTool>
+              <ng-container *ngIf="toolStatus() as tool">
+                <div
+                  class="field-status__section field-status__primary field-status__tool"
+                >
+                  <div class="field-status__info">
+                    <span class="field-status__label">Tool</span>
+                  </div>
+                  <div
+                    class="field-status__tool-content"
+                    [ngSwitch]="tool.kind"
+                  >
+                    <div *ngSwitchCase="'pen'">
+                      <div class="field-status__actions">
+                        <div class="field-status__colors">
+                          <span class="field-status__value"
+                            >{{ tool.label }}</span
+                          >
 
-        <section
+                          <button
+                            type="button"
+                            class="field-status__color-button"
+                            [style.background-color]="tool.color"
+                            (click)="toggleColorMenu('pen')"
+                            aria-label="Stiftfarbe ändern"
+                          >
+                            <span class="sr-only">Stiftfarbe ändern</span>
+                          </button>
+                          <div
+                            class="field-status__color-menu"
+                            *ngIf="openToolColorMenu() === 'pen'"
+                          >
+                            <div class="field-status__swatches">
+                              <button
+                                type="button"
+                                *ngFor="let color of tool.palette || []"
+                                class="field-status__swatch"
+                                [class.field-status__swatch--active]="tool.color && tool.color.toLowerCase() === color.toLowerCase()"
+                                [style.background-color]="color"
+                                (click)="applyToolColor('pen', color)"
+                                [attr.aria-label]="'Farbe ' + color"
+                              ></button>
+                            </div>
+                            <label class="field-status__custom">
+                              Eigene Farbe
+                              <input
+                                type="color"
+                                [value]="tool.color || '#ffffff'"
+                                (input)="applyCustomColor($event, 'pen')"
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                      <label class="field-status__slider">
+                        <span>
+                          Strichstärke
+                          <small>{{ strokeWidthFactorLabel() }}</small>
+                        </span>
+                        <input
+                          #penWidthSlider
+                          type="range"
+                          [min]="strokeFactorMin"
+                          [max]="strokeFactorMax"
+                          step="0.05"
+                          [value]="strokeWidthFactor()"
+                          (input)="changeStrokeWidthFactor(penWidthSlider.value)"
+                        />
+                      </label>
+                    </div>
+
+                    <div *ngSwitchCase="'arrow'">
+                      <div class="field-status__actions">
+                        <div class="field-status__colors">
+                          <span class="field-status__value"
+                            >{{ tool.label }}</span
+                          >
+
+                          <button
+                            type="button"
+                            class="field-status__color-button"
+                            [style.background-color]="tool.color"
+                            (click)="toggleColorMenu('arrow')"
+                            aria-label="Pfeilfarbe ändern"
+                          >
+                            <span class="sr-only">Pfeilfarbe ändern</span>
+                          </button>
+                          <div
+                            class="field-status__color-menu"
+                            *ngIf="openToolColorMenu() === 'arrow'"
+                          >
+                            <div class="field-status__swatches">
+                              <button
+                                type="button"
+                                *ngFor="let color of tool.palette || []"
+                                class="field-status__swatch"
+                                [class.field-status__swatch--active]="tool.color && tool.color.toLowerCase() === color.toLowerCase()"
+                                [style.background-color]="color"
+                                (click)="applyToolColor('arrow', color)"
+                                [attr.aria-label]="'Farbe ' + color"
+                              ></button>
+                            </div>
+                            <label class="field-status__custom">
+                              Eigene Farbe
+                              <input
+                                type="color"
+                                [value]="tool.color || '#ffffff'"
+                                (input)="applyCustomColor($event, 'arrow')"
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                      <label class="field-status__slider">
+                        <span>
+                          Strichstärke
+                          <small>{{ strokeWidthFactorLabel() }}</small>
+                        </span>
+                        <input
+                          #arrowWidthSlider
+                          type="range"
+                          [min]="strokeFactorMin"
+                          [max]="strokeFactorMax"
+                          step="0.05"
+                          [value]="strokeWidthFactor()"
+                          (input)="changeStrokeWidthFactor(arrowWidthSlider.value)"
+                        />
+                      </label>
+                    </div>
+
+                    <div *ngSwitchCase="'eraser'">
+                      <span class="field-status__value">{{ tool.label }}</span>
+
+                      <label class="field-status__slider">
+                        <span>
+                          Radius
+                          <small>{{ eraserRadiusLabel() }}</small>
+                        </span>
+                        <input
+                          #eraserRadiusSlider
+                          type="range"
+                          [min]="eraserRadiusMin"
+                          [max]="eraserRadiusMax"
+                          step="1"
+                          [value]="eraserRadius()"
+                          (input)="changeEraserRadius(eraserRadiusSlider.value)"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </ng-container>
+            </ng-template>
+
+            <!-- field controls moved to canvas surface -->
+          </div>
+
+          <section
+            class="collapsible collapsible--tools"
+            [class.collapsible--open]="showToolsPanel()"
+          >
+            <button
+              type="button"
+              class="collapsible__header"
+              (click)="toggleToolsPanel()"
+              [attr.aria-expanded]="showToolsPanel()"
+            >
+              <span class="collapsible__label">Werkzeuge</span>
+              <span
+                class="collapsible__chevron"
+                [class.collapsible__chevron--open]="showToolsPanel()"
+                aria-hidden="true"
+              >
+                ▾
+              </span>
+            </button>
+            <div class="collapsible__body" *ngIf="showToolsPanel()">
+              <div class="tool-buttons">
+                <div
+                  class="tool-buttons__item"
+                  *ngFor="let tool of toolShortcuts"
+                >
+                  <span
+                    class="tool-buttons__shortcut"
+                    [class.tool-buttons__shortcut--active]="tool.id === selectedTool()"
+                  >
+                    {{ tool.shortcut }}
+                  </span>
+                  <button
+                    type="button"
+                    class="tool-button"
+                    [class.tool-button--active]="tool.id === selectedTool()"
+                    (click)="selectTool(tool.id)"
+                  >
+                    <span class="tool-button__label">{{ tool.label }}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section
+            class="collapsible collapsible--animation"
+            [class.collapsible--open]="showAnimationPanel()"
+          >
+            <button
+              type="button"
+              class="collapsible__header"
+              (click)="toggleAnimationPanel()"
+              [attr.aria-expanded]="showAnimationPanel()"
+            >
+              <span class="collapsible__label">Animation</span>
+              <span
+                class="collapsible__chevron"
+                [class.collapsible__chevron--open]="showAnimationPanel()"
+                aria-hidden="true"
+              >
+                ▾
+              </span>
+            </button>
+            <div class="collapsible__body" *ngIf="showAnimationPanel()">
+              <div class="scene-strip" role="tablist" aria-label="Szenen">
+                <div class="scene-strip__list">
+                  <div
+                    class="scene-strip__item"
+                    *ngFor="let item of scenes(); trackBy: trackScene"
+                    [class.scene-strip__item--active]="item.id === activeSceneIdValue()"
+                  >
+                    <button
+                      type="button"
+                      class="scene-strip__select"
+                      (click)="activateScene(item.id)"
+                      role="tab"
+                      [attr.aria-selected]="item.id === activeSceneIdValue()"
+                    >
+                      <div
+                        class="scene-strip__thumbnail"
+                        [class.scene-strip__thumbnail--empty]="!item.previewDataUrl"
+                        [style.background-image]="item.previewDataUrl ? 'url(' + item.previewDataUrl + ')' : ''"
+                      ></div>
+                      <div class="scene-strip__meta">
+                        <span class="scene-strip__label">{{ item.label }}</span>
+                        <span class="scene-strip__time"
+                          >{{ item.updatedAt | date: 'HH:mm' }}</span
+                        >
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      class="scene-strip__delete"
+                      (click)="deleteScene(item.id); $event.stopPropagation()"
+                      [disabled]="scenes().length <= 1"
+                      aria-label="Szene entfernen"
+                      title="Szene entfernen"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="scene-strip__add"
+                  (click)="addScene()"
+                  aria-label="Neue Szene hinzufügen"
+                >
+                  <span aria-hidden="true">+</span>
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section
             class="collapsible field-footer__panel"
             [class.collapsible--open]="showAdvancedPanel()"
           >
@@ -507,7 +709,10 @@
                       <span class="toggle-button__label">Feld:</span>
                       <span class="toggle-button__value">Einstellungen</span>
                     </button>
-                    <div *ngIf="showFieldSettings()" class="field-settings__dropdown">
+                    <div
+                      *ngIf="showFieldSettings()"
+                      class="field-settings__dropdown"
+                    >
                       <div class="field-settings__group">
                         <span class="field-settings__heading">Farben</span>
                         <label class="field-settings__option">
@@ -566,10 +771,18 @@
                 </div>
 
                 <div class="field-area__actions field-area__actions--undo">
-                  <button type="button" (click)="undo()" [disabled]="!canUndo()">
+                  <button
+                    type="button"
+                    (click)="undo()"
+                    [disabled]="!canUndo()"
+                  >
                     Undo ({{ undoDepth() }})
                   </button>
-                  <button type="button" (click)="redo()" [disabled]="!canRedo()">
+                  <button
+                    type="button"
+                    (click)="redo()"
+                    [disabled]="!canRedo()"
+                  >
                     Redo ({{ redoDepth() }})
                   </button>
                 </div>
@@ -653,7 +866,9 @@
                     </select>
                   </label>
                   <label class="field-area__resolution">
-                    <span class="field-area__resolution-label">Dauer pro Szene</span>
+                    <span class="field-area__resolution-label"
+                      >Dauer pro Szene</span
+                    >
                     <select
                       #animationDurationSelect
                       class="field-area__resolution-select"
@@ -681,12 +896,17 @@
                     (click)="exportAnimation()"
                     [disabled]="!canExportAnimation() || isAnimationExporting()"
                   >
-                    <ng-container *ngIf="!isAnimationExporting(); else exportingAnimation">
+                    <ng-container
+                      *ngIf="!isAnimationExporting(); else exportingAnimation"
+                    >
                       Export Animation
                     </ng-container>
                     <ng-template #exportingAnimation>
                       <span class="field-area__exporting">
-                        <span class="field-area__spinner" aria-hidden="true"></span>
+                        <span
+                          class="field-area__spinner"
+                          aria-hidden="true"
+                        ></span>
                         {{ animationProgress()?.message ?? 'Export läuft …' }}
                       </span>
                     </ng-template>
@@ -699,48 +919,311 @@
           <p class="field-area__pointer" *ngIf="lastPointerEvent() as pointer">
             Letztes Event: {{ pointer }}
           </p>
-      </div>
-    </section>
-
-
-    <aside class="team-panel team-panel--right">
-      <header class="team-panel__header">
-        <div class="team-panel__info team-panel__info--right">
-          <div class="team-panel__startRow">
-            <h2>{{ rightTeam.name }}</h2>
-          </div>
         </div>
-        <div class="team-panel__teamBrand">
-          <div class="team-panel__actions">
-            <button type="button">Color 1</button>
-            <button type="button">Color 2</button>
-          </div>
-          <div class="team-panel__avatar" aria-hidden="true"></div>
-        </div>
-      </header>
+      </section>
 
-      <ul class="player-list">
-        <li
-          *ngFor="let player of rightPlayers()"
-          class="player-card"
-          draggable="true"
-          (dragstart)="onDragStart($event, player, rightTeam)"
-          [class.player-card--active]="playerTokenId(player) === selectedTokenId()"
-          [class.player-card--hover]="playerTokenId(player) === hoveredTokenId()"
+      <aside
+        class="team-panel team-panel--right"
+        [class.team-panel--collapsed]="isTeamPanelCollapsed('right')"
+      >
+        <header class="team-panel__header">
+          <button
+            type="button"
+            class="team-panel__collapse"
+            (click)="toggleTeamPanel('right')"
+            [attr.aria-expanded]="!isTeamPanelCollapsed('right')"
+            aria-controls="right-team-panel"
+          >
+            <span class="team-panel__collapse-icon" aria-hidden="true"></span>
+            <span class="sr-only">
+              {{ isTeamPanelCollapsed('right') ? 'Team oeffnen' : 'Team einklappen' }}
+            </span>
+          </button>
+
+          <div class="team-panel__header-content">
+            <button
+              type="button"
+              class="team-panel__logo-button"
+              (click)="onTeamLogoClick($event, 'right', rightLogoInput)"
+              [attr.aria-label]="rightTeamConfig().logoDataUrl ? 'Teamlogo entfernen' : 'Teamlogo waehlen'"
+            >
+              <ng-container *ngIf="rightTeamConfig().logoDataUrl as logo; else rightLogoPlaceholder">
+                <img [src]="logo" alt="Team Logo" />
+              </ng-container>
+            </button>
+            <ng-template #rightLogoPlaceholder>
+              <span>Logo</span>
+            </ng-template>
+            <input
+              #rightLogoInput
+              class="sr-only"
+              type="file"
+              accept="image/*"
+              (change)="handleTeamLogoSelected('right', $any($event.target).files)"
+            />
+
+            <div class="team-panel__header-info">
+              <div class="team-panel__name-wrapper">
+                <button
+                  type="button"
+                  class="team-panel__name-display"
+                  [class.team-panel__name-display--hidden]="editingTeamName() === 'right'"
+                  (click)="beginEditTeamName('right')"
+                >
+                  {{ rightTeamConfig().name }}
+                </button>
+                <input
+                  *ngIf="editingTeamName() === 'right'"
+                  type="text"
+                  class="team-panel__name-input"
+                  data-team-name-input="right"
+                  [value]="teamNameDraft().right"
+                  (input)="onTeamNameDraft('right', $any($event.target).value)"
+                  (blur)="finishTeamNameEdit('right')"
+                  (keydown.enter)="finishTeamNameEdit('right')"
+                  (keydown.escape)="cancelTeamNameEdit('right')"
+                />
+              </div>
+
+              <div class="team-panel__color-row">
+                <label class="team-panel__color-field">
+                  <span>Farbe 1</span>
+                  <input
+                    type="color"
+                    [value]="rightTeamConfig().colors.primary"
+                    (input)="updateTeamColor('right', 'primary', $any($event.target).value)"
+                  />
+                </label>
+                <label class="team-panel__color-field">
+                  <span>Farbe 2</span>
+                  <input
+                    type="color"
+                    [value]="rightTeamConfig().colors.secondary"
+                    (input)="updateTeamColor('right', 'secondary', $any($event.target).value)"
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <div
+          class="team-panel__body"
+          id="right-team-panel"
+          *ngIf="!isTeamPanelCollapsed('right')"
         >
-          <span class="player-card__number">{{ player.number ?? '—' }}</span>
-          <div class="player-card__details">
-            <span class="player-card__name">{{ player.name }}</span>
-            <span class="player-card__role">{{ player.role }}</span>
-          </div>
-        </li>
-      </ul>
-    </aside>
-    </div>
+          <div
+            class="team-panel__new-player"
+            (dragover)="allowPompfenDrop($event)"
+            (drop)="handlePompfenDropOnDraft($event, 'right')"
+          >
+            <button
+              type="button"
+              class="team-panel__new-player-icon"
+              (click)="openPompfenPickerForDraft('right')"
+              (dragover)="allowPompfenDrop($event)"
+              (drop)="handlePompfenDropOnDraft($event, 'right')"
+              [attr.aria-label]="draftPlayers().right.pompfenId ? 'Pompfe aendern' : 'Pompfe waehlen'"
+            >
+              <ng-container *ngIf="draftPlayers().right.pompfenId as draftPompfen; else rightDraftIconPlaceholder">
+                <img [src]="getPompfenIcon(draftPompfen) || ''" [alt]="getPompfenTitle(draftPompfen) || 'Pompfe'" />
+              </ng-container>
+            </button>
+            <ng-template #rightDraftIconPlaceholder>
+              <span>+</span>
+            </ng-template>
 
+            <div class="team-panel__new-player-fields">
+              <input
+                type="text"
+                class="team-panel__new-player-input"
+                placeholder="Spieler hinzufuegen"
+                autocomplete="off"
+                [value]="draftPlayers().right.name"
+                (input)="updateDraftName('right', $any($event.target).value)"
+                (keydown.enter)="addPlayerFromDraft('right')"
+              />
+              <small>
+                {{ draftPlayers().right.pompfenId ? getPompfenTitle(draftPlayers().right.pompfenId) : 'Pompfe waehlen' }}
+              </small>
+            </div>
+
+            <button
+              type="button"
+              class="team-panel__new-player-submit"
+              (click)="addPlayerFromDraft('right')"
+              [disabled]="!draftPlayers().right.name.trim().length"
+            >
+              Hinzufuegen
+            </button>
+          </div>
+
+          <ul class="player-list">
+            <li
+              *ngFor="let player of rightPlayers(); trackBy: trackPlayer"
+              class="player-card"
+              draggable="true"
+              (dragstart)="onDragStart($event, player, rightTeam())"
+              (dragover)="allowPompfenDrop($event)"
+              (drop)="handlePompfenDropOnPlayer($event, 'right', player.id)"
+              [class.player-card--active]="playerTokenId(player) === selectedTokenId()"
+              [class.player-card--hover]="playerTokenId(player) === hoveredTokenId()"
+            >
+              <div class="player-card__main">
+                <button
+                  type="button"
+                  class="player-card__icon-button"
+                  (click)="openPompfenPickerForPlayer('right', player.id)"
+                  (dragover)="allowPompfenDrop($event)"
+                  (drop)="handlePompfenDropOnPlayer($event, 'right', player.id)"
+                  [attr.aria-label]="getPompfenTitle(player.pompfenId) ? 'Pompfe aendern' : 'Pompfe waehlen'"
+                >
+                  <ng-container *ngIf="getPompfenIcon(player.pompfenId) as icon; else rightPlayerIconPlaceholder">
+                    <img [src]="icon" [alt]="getPompfenTitle(player.pompfenId) || player.name" />
+                  </ng-container>
+                </button>
+                <ng-template #rightPlayerIconPlaceholder>
+                  <span>?</span>
+                </ng-template>
+
+                <div class="player-card__text">
+                  <input
+                    *ngIf="isEditingPlayer('right', player.id); else rightPlayerNameDisplay"
+                    type="text"
+                    class="player-card__input player-card__input--editing"
+                    autocomplete="off"
+                    [value]="player.name"
+                    (input)="updatePlayerName('right', player.id, $any($event.target).value)"
+                    (blur)="finishPlayerEdit('right', player.id)"
+                    (keydown.enter)="finishPlayerEdit('right', player.id)"
+                    (keydown.escape)="cancelPlayerEdit()"
+                  />
+                  <ng-template #rightPlayerNameDisplay>
+                    <button
+                      type="button"
+                      class="player-card__name-button"
+                      (click)="startEditingPlayer('right', player.id)"
+                    >
+                      {{ player.name }}
+                    </button>
+                  </ng-template>
+                  <span class="player-card__role">
+                    {{ getPompfenTitle(player.pompfenId) || 'Keine Pompfe' }}
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                class="player-card__remove"
+                (click)="removePlayer('right', player.id)"
+              >
+                &times;
+              </button>
+            </li>
+          </ul>
+
+          <div class="team-panel__footer">
+            <button type="button" (click)="showTeamLoadDialog('right')">Team laden</button>
+            <button type="button" (click)="exportTeam('right')">Team exportieren</button>
+          </div>
+        </div>
+      </aside>
+    </div>
   </main>
 </div>
 
+<div
+  class="team-dialog"
+  *ngIf="teamDialog() as dialog"
+>
+  <div
+    class="team-dialog__backdrop"
+    role="button"
+    tabindex="0"
+    (click)="closeTeamDialog()"
+    (keyup.enter)="closeTeamDialog()"
+    (keyup.space)="closeTeamDialog()"
+  ></div>
+  <div class="team-dialog__panel" role="dialog" aria-modal="true">
+    <header class="team-dialog__header">
+      <h3>Team laden</h3>
+      <p class="team-dialog__subtitle">
+        {{ dialog.side === 'left' ? 'Linkes Team' : 'Rechtes Team' }}
+      </p>
+    </header>
+    <section class="team-dialog__section">
+      <h4>Teamdatei hochladen</h4>
+      <label class="team-dialog__file">
+        <span>Datei auswaehlen</span>
+        <input
+          type="file"
+          accept="application/json,.json"
+          (change)="handleTeamFileInput(dialog.side, $any($event.target).files)"
+        />
+      </label>
+    </section>
+    <section class="team-dialog__section">
+      <h4>Gespeicherte Teams</h4>
+      <ng-container *ngIf="availableStoredTeams().length; else noStoredTeams">
+        <button
+          type="button"
+          class="team-dialog__stored"
+          *ngFor="let entry of availableStoredTeams()"
+          (click)="selectStoredTeam(dialog.side, entry.id)"
+        >
+          {{ entry.name }}
+        </button>
+      </ng-container>
+      <ng-template #noStoredTeams>
+        <p class="team-dialog__empty">Keine gespeicherten Teams gefunden.</p>
+      </ng-template>
+    </section>
+    <footer class="team-dialog__footer">
+      <button type="button" (click)="closeTeamDialog()">Schliessen</button>
+    </footer>
+  </div>
+</div>
+<div
+  class="pompfen-picker"
+  *ngIf="pompfenPicker() as picker"
+>
+  <div
+    class="pompfen-picker__backdrop"
+    role="button"
+    tabindex="0"
+    (click)="closePompfenPicker()"
+    (keyup.enter)="closePompfenPicker()"
+    (keyup.space)="closePompfenPicker()"
+  ></div>
+  <div class="pompfen-picker__panel" role="dialog" aria-modal="true">
+    <header class="pompfen-picker__header">
+      <h3>Pompfe waehlen</h3>
+      <p class="pompfen-picker__subtitle">
+        {{ picker.playerId ? 'Spieler' : 'Neuer Spieler' }}
+      </p>
+      <button type="button" class="pompfen-picker__close" (click)="closePompfenPicker()">x</button>
+    </header>
+    <div class="pompfen-picker__grid">
+      <button
+        type="button"
+        class="pompfen-picker__option"
+        *ngFor="let pompfen of pompfenOptions"
+        (click)="choosePompfen(pompfen.id)"
+      >
+        <img [src]="pompfen.icon" [alt]="pompfen.label" />
+        <span>{{ pompfen.label }}</span>
+      </button>
+    </div>
+    <button
+      type="button"
+      class="pompfen-picker__none"
+      (click)="choosePompfen(null)"
+    >
+      Keine Pompfe
+    </button>
+  </div>
+</div>
 <div
   class="toast"
   *ngIf="toast() as toast"

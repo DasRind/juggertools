@@ -77,6 +77,7 @@ export class CanvasEngine {
   private viewport: EngineViewport;
   private fieldToCanvas: Matrix2D = IDENTITY_MATRIX;
   private canvasToField: Matrix2D = IDENTITY_MATRIX;
+  private transformMode: 'auto' | 'custom' = 'auto';
   private dpr: number;
   private rafHandle: number | null = null;
   private destroyed = false;
@@ -123,21 +124,27 @@ export class CanvasEngine {
 
   setScene(scene: SceneSnapshot | undefined): void {
     this.scene = scene;
-    if (scene) {
+    if (scene && this.transformMode === 'auto') {
       this.computeFitTransform();
+    } else {
+      this.scheduleDraw();
     }
-    this.scheduleDraw();
   }
 
   getScene(): SceneSnapshot | undefined {
     return this.scene;
   }
 
-  setTransform(matrix: Matrix2D): void {
+  private applyTransform(matrix: Matrix2D, mode: 'auto' | 'custom'): void {
     const scaled = composeTransforms([matrixScale(this.dpr), matrix]);
     this.fieldToCanvas = scaled;
     this.canvasToField = matrixInvert(scaled);
+    this.transformMode = mode;
     this.scheduleDraw();
+  }
+
+  setTransform(matrix: Matrix2D): void {
+    this.applyTransform(matrix, 'custom');
   }
 
   getTransform(): Matrix2D {
@@ -172,7 +179,7 @@ export class CanvasEngine {
     this.canvas.width = Math.max(1, Math.floor(width * this.dpr));
     this.canvas.height = Math.max(1, Math.floor(height * this.dpr));
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    if (this.scene) {
+    if (this.scene && this.transformMode === 'auto') {
       this.computeFitTransform();
     } else {
       this.scheduleDraw();
@@ -447,7 +454,16 @@ export class CanvasEngine {
     }
 
     const transform = composeTransforms([centerOffset, scaleMatrix, orientationMatrix]);
-    this.setTransform(transform);
+    this.applyTransform(transform, 'auto');
+  }
+
+  autoFitScene(): void {
+    this.transformMode = 'auto';
+    if (this.scene) {
+      this.computeFitTransform();
+    } else {
+      this.scheduleDraw();
+    }
   }
 
   private autoscale(srcWidth: number, srcHeight: number, dstWidth: number, dstHeight: number): number {

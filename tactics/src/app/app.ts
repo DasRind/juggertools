@@ -42,6 +42,7 @@ import {
   Drawing,
   SceneSnapshot,
   Team,
+  TeamSide,
   Token,
 } from '@juggertools/core-domain';
 import { matrixApplyToPoint } from '@juggertools/core-geometry';
@@ -153,6 +154,57 @@ interface DragPayload {
   teamId: string;
 }
 
+const TEAM_FILE_SCHEMA = 'juggertools.team' as const;
+const TEAM_FILE_VERSION = 1 as const;
+const TEAM_STORAGE_KEY = 'juggertools:tactics:teams';
+
+type PompfenId =
+  | 'chain'
+  | 'staff'
+  | 'sword'
+  | 'shield'
+  | 'q-tip'
+  | 'dual'
+  | 'reserve';
+
+interface PompfenDefinition {
+  id: PompfenId;
+  label: string;
+  title: string;
+  icon: string;
+}
+
+interface TeamPlayerConfig {
+  id: string;
+  name: string;
+  pompfenId: PompfenId | null;
+}
+
+interface TeamConfig {
+  id: string;
+  name: string;
+  colors: {
+    primary: string;
+    secondary: string;
+  };
+  logoDataUrl?: string | null;
+  players: TeamPlayerConfig[];
+}
+
+interface TeamFilePayload {
+  schema: typeof TEAM_FILE_SCHEMA;
+  version: typeof TEAM_FILE_VERSION;
+  savedAt: string;
+  team: TeamConfig;
+}
+
+interface StoredTeamEntry {
+  id: string;
+  name: string;
+  updatedAt: string;
+  team: TeamConfig;
+}
+
 interface PersistedSession {
   scenes: SceneDeckEntry[];
   activeSceneId: string;
@@ -197,6 +249,26 @@ const DEFAULT_FIELD_LINE_ALPHA = 0.55;
 const EXPORT_PADDING = 0;
 const EXPORT_DEVICE_PIXEL_RATIO = 1;
 const SCENE_PREVIEW_WIDTH = 220;
+const DEFAULT_TEAM_COLORS: Record<TeamSide, { primary: string; secondary: string }> = {
+  left: { primary: "#dc2626", secondary: "#fb7185" },
+  right: { primary: "#2563eb", secondary: "#60a5fa" },
+};
+
+const DEFAULT_TEAM_NAMES: Record<TeamSide, string> = {
+  left: "Linkes Team",
+  right: "Rechtes Team",
+};
+
+const POMPFEN_DEFINITIONS: readonly PompfenDefinition[] = [
+  { id: "chain", label: "Kette", title: "Kettenlaeufer", icon: "assets/pompfen/pompfen-chain.svg" },
+  { id: "staff", label: "Stab", title: "Stabspieler", icon: "assets/pompfen/pompfen-staff.svg" },
+  { id: "sword", label: "Schwert", title: "Schwert", icon: "assets/pompfen/pompfen-sword.svg" },
+  { id: "shield", label: "Schild", title: "Schild", icon: "assets/pompfen/pompfen-shield.svg" },
+  { id: "q-tip", label: "Q-Tip", title: "Q-Tip", icon: "assets/pompfen/pompfen-qtip.svg" },
+  { id: "dual", label: "Dual", title: "Dual", icon: "assets/pompfen/pompfen-dual.svg" },
+  { id: "reserve", label: "Reserve", title: "Reserve", icon: "assets/pompfen/pompfen-reserve.svg" },
+];
+
 const SCENE_PREVIEW_HEIGHT = 124;
 const SCENE_PREVIEW_DEBOUNCE_MS = 180;
 const SCENE_ANIMATION_FRAME_DURATION_MS = 1200;
@@ -264,33 +336,56 @@ interface ExportResolutionOption {
 export class App implements OnDestroy {
   private readonly toastService = inject(ToastService);
 
-  readonly leftTeam: Team = {
-    id: 'team-left',
-    name: 'Red Ravens',
-    color: '#f94144',
-    players: [
-      { id: 'left-1', name: 'Aileen Sparks', role: 'Runner', number: '7' },
-      { id: 'left-2', name: 'Mika Storm', role: 'Chain', number: '3' },
-      { id: 'left-3', name: 'Robin Vale', role: 'Brace', number: '5' },
-      { id: 'left-4', name: 'Kai Ember', role: 'Quick', number: '12' },
-      { id: 'left-5', name: 'Suri Onyx', role: 'Support', number: '9' },
-      { id: 'left-6', name: 'Nova Blaze', role: 'Flex', number: '4' },
-    ],
-  };
+  readonly pompfenOptions = POMPFEN_DEFINITIONS;
 
-  readonly rightTeam: Team = {
-    id: 'team-right',
-    name: 'Azure Titans',
-    color: '#277da1',
-    players: [
-      { id: 'right-1', name: 'Luca Frost', role: 'Runner', number: '21' },
-      { id: 'right-2', name: 'Ivy Quill', role: 'Chain', number: '11' },
-      { id: 'right-3', name: 'Dax Flint', role: 'Brace', number: '8' },
-      { id: 'right-4', name: 'Rowan Haze', role: 'Quick', number: '6' },
-      { id: 'right-5', name: 'Vera Sol', role: 'Support', number: '14' },
-      { id: 'right-6', name: 'Olen Tide', role: 'Flex', number: '2' },
-    ],
-  };
+  private readonly leftTeamState = signal<TeamConfig>(
+    this.createInitialTeamConfig('left')
+  );
+  private readonly rightTeamState = signal<TeamConfig>(
+    this.createInitialTeamConfig('right')
+  );
+
+  readonly leftTeam = computed<Team>(() => this.toDomainTeam(this.leftTeamState()));
+  readonly rightTeam = computed<Team>(() => this.toDomainTeam(this.rightTeamState()));
+
+  private readonly storedTeams = signal<StoredTeamEntry[]>(this.loadStoredTeams());
+  readonly availableStoredTeams = computed(() => this.storedTeams());
+
+  private readonly teamCollapseState = signal<Record<TeamSide, boolean>>({
+    left: true,
+    right: true,
+  });
+  readonly teamCollapsed = computed(() => this.teamCollapseState());
+
+  private readonly teamNameDrafts = signal<Record<TeamSide, string>>({
+    left: DEFAULT_TEAM_NAMES.left,
+    right: DEFAULT_TEAM_NAMES.right,
+  });
+  readonly teamNameDraft = computed(() => this.teamNameDrafts());
+
+  private readonly playerDrafts = signal<
+    Record<TeamSide, { name: string; pompfenId: PompfenId | null }>
+  >({
+    left: { name: '', pompfenId: null },
+    right: { name: '', pompfenId: null },
+  });
+  readonly draftPlayers = computed(() => this.playerDrafts());
+  readonly leftTeamConfig = computed(() => this.leftTeamState());
+  readonly rightTeamConfig = computed(() => this.rightTeamState());
+
+  private readonly activeTeamDialog = signal<{ side: TeamSide; mode: 'load' } | null>(null);
+  readonly teamDialog = computed(() => this.activeTeamDialog());
+
+  private readonly editingTeamNameState = signal<TeamSide | null>(null);
+  readonly editingTeamName = computed(() => this.editingTeamNameState());
+
+  private readonly editingPlayerState = signal<{ side: TeamSide; playerId: string } | null>(null);
+  readonly editingPlayer = computed(() => this.editingPlayerState());
+
+  private pendingTeamNameFocus: TeamSide | null = null;
+
+  private readonly pompfenPickerState = signal<{ side: TeamSide; playerId?: string } | null>(null);
+  readonly pompfenPicker = computed(() => this.pompfenPickerState());
 
   private readonly sceneSnapshot = signal(
     createSceneSnapshot({
@@ -300,8 +395,8 @@ export class App implements OnDestroy {
         height: DEFAULT_FIELD_DIMENSIONS.height,
         lines: buildFieldLinesFromLayout(JUGGER_FIELD_LAYOUT),
       },
-      leftTeam: this.leftTeam,
-      rightTeam: this.rightTeam,
+      leftTeam: this.leftTeam(),
+      rightTeam: this.rightTeam(),
     })
   );
 
@@ -499,6 +594,301 @@ export class App implements OnDestroy {
   readonly isDraggingToken = signal<boolean>(false);
   readonly isDraggingDrawing = signal<boolean>(false);
 
+  private getTeamState(side: TeamSide): TeamConfig {
+    return side === 'left' ? this.leftTeamState() : this.rightTeamState();
+  }
+
+  private updateTeamState(
+    side: TeamSide,
+    mutator: (team: TeamConfig) => TeamConfig
+  ): void {
+    const signalRef = side === 'left' ? this.leftTeamState : this.rightTeamState;
+    signalRef.update((current) => {
+      const base = this.cloneTeamConfig(current);
+      const next = this.cloneTeamConfig(mutator(base));
+      return next;
+    });
+    this.syncTeamNameDraft(side);
+    this.syncTeamsToScene();
+  }
+
+  private replaceTeamState(side: TeamSide, next: TeamConfig): void {
+    const signalRef = side === 'left' ? this.leftTeamState : this.rightTeamState;
+    signalRef.set(this.cloneTeamConfig(next));
+    this.syncTeamNameDraft(side);
+    this.syncTeamsToScene();
+  }
+
+  private persistTeamState(side: TeamSide): void {
+    this.syncTeamNameDraft(side);
+    this.rememberStoredTeam(this.getTeamState(side));
+  }
+
+  private toDomainTeam(config: TeamConfig): Team {
+    return {
+      id: config.id,
+      name: config.name,
+      color: config.colors.primary,
+      logoUrl: config.logoDataUrl ?? undefined,
+      players: config.players.map((player) => ({
+        id: player.id,
+        name: player.name,
+        role: this.getPompfenTitle(player.pompfenId),
+      })),
+    };
+  }
+  private createInitialTeamConfig(side: TeamSide): TeamConfig {
+    const defaults = DEFAULT_TEAM_COLORS[side];
+    return {
+      id: side === 'left' ? 'team-left' : 'team-right',
+      name: DEFAULT_TEAM_NAMES[side],
+      colors: {
+        primary: defaults.primary,
+        secondary: defaults.secondary,
+      },
+      logoDataUrl: null,
+      players: [],
+    };
+  }
+
+  private cloneTeamConfig(config: TeamConfig): TeamConfig {
+    return {
+      id: config.id,
+      name: config.name,
+      colors: { ...config.colors },
+      logoDataUrl: config.logoDataUrl ?? null,
+      players: config.players.map((player) => ({ ...player })),
+    };
+  }
+
+  private createTeamPlayerId(side: TeamSide): string {
+    const prefix = side === 'left' ? 'left' : 'right';
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+      return `${prefix}-${(crypto as { randomUUID?: () => string }).randomUUID?.() ?? Math.random().toString(16).slice(2)}`;
+    }
+    return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+  }
+
+  private readPompfenId(event: DragEvent): PompfenId | null {
+    const transfer = event.dataTransfer;
+    if (!transfer) {
+      return null;
+    }
+    const data =
+      transfer.getData('application/x-juggertools-pompfen') ||
+      transfer.getData('text/plain');
+    const match = this.pompfenOptions.find((option) => option.id === data);
+    return match ? match.id : null;
+  }
+
+  private normalizeImportedTeam(
+    raw: Partial<TeamConfig>,
+    side: TeamSide
+  ): TeamConfig {
+    const defaults = DEFAULT_TEAM_COLORS[side];
+    const teamId = side === 'left' ? 'team-left' : 'team-right';
+    const players = Array.isArray(raw.players)
+      ? raw.players.map((player, index) => ({
+          id: player?.id ?? `${teamId}-player-${index}`,
+          name: (player?.name ?? `Spieler ${index + 1}`).toString(),
+          pompfenId: this.ensurePompfenId((player as TeamPlayerConfig | undefined)?.pompfenId),
+        }))
+      : [];
+    return {
+      id: teamId,
+      name: (raw.name ?? DEFAULT_TEAM_NAMES[side]).toString().trim() || DEFAULT_TEAM_NAMES[side],
+      colors: {
+        primary: raw.colors?.primary ?? defaults.primary,
+        secondary: raw.colors?.secondary ?? defaults.secondary,
+      },
+      logoDataUrl: raw.logoDataUrl ?? null,
+      players,
+    };
+  }
+
+  private ensurePompfenId(value: unknown): PompfenId | null {
+    const candidate = typeof value === 'string' ? value : null;
+    return candidate && this.pompfenOptions.some((option) => option.id === candidate)
+      ? (candidate as PompfenId)
+      : null;
+  }
+
+  private applyTeamConfig(side: TeamSide, config: Partial<TeamConfig>): void {
+    const normalized = this.normalizeImportedTeam(config, side);
+    this.replaceTeamState(side, normalized);
+  }
+
+
+  private restoreTeamsFromStorage(): void {
+    const entries = this.storedTeams();
+    const leftId = this.leftTeamState().id;
+    const rightId = this.rightTeamState().id;
+    const leftStored = entries.find((entry) => entry.id === leftId);
+    const rightStored = entries.find((entry) => entry.id === rightId);
+    if (leftStored) {
+      this.replaceTeamState('left', leftStored.team);
+    }
+    if (rightStored) {
+      this.replaceTeamState('right', rightStored.team);
+    }
+    this.syncTeamNameDraft('left');
+    this.syncTeamNameDraft('right');
+  }
+
+  getPompfenDefinition(id: PompfenId | null): PompfenDefinition | undefined {
+    if (!id) {
+      return undefined;
+    }
+    return this.pompfenOptions.find((option) => option.id === id);
+  }
+
+  getPompfenIcon(id: PompfenId | null): string | null {
+    return this.getPompfenDefinition(id)?.icon ?? null;
+  }
+
+  getPompfenTitle(id: PompfenId | null): string | undefined {
+    return this.getPompfenDefinition(id)?.title;
+  }
+  private syncTeamNameDraft(side: TeamSide): void {
+    if (this.editingTeamNameState() === side) {
+      return;
+    }
+    const name = this.getTeamState(side).name;
+    this.teamNameDrafts.update((drafts) => ({
+      ...drafts,
+      [side]: name,
+    }));
+  }
+
+  private syncTeamsToScene(): void {
+    const leftTeam = this.leftTeam();
+    const rightTeam = this.rightTeam();
+    const validPlayerIds = new Set(
+      [...leftTeam.players, ...rightTeam.players].map((player) => player.id)
+    );
+    this.sceneSnapshot.update((snapshot) => {
+      const filteredTokens = snapshot.scene.tokens.filter(
+        (token) => !token.playerId || validPlayerIds.has(token.playerId)
+      );
+      const updatedAt = nowISO();
+      const scene = {
+        ...snapshot.scene,
+        leftTeam,
+        rightTeam,
+        tokens: filteredTokens,
+        lastUpdatedAt: updatedAt,
+      };
+      const nextSnapshot: SceneSnapshot = { ...snapshot, scene };
+      this.engine?.setScene(nextSnapshot);
+      return nextSnapshot;
+    });
+  }
+
+  private createTeamExportPayload(team: TeamConfig): TeamFilePayload {
+    return {
+      schema: TEAM_FILE_SCHEMA,
+      version: TEAM_FILE_VERSION,
+      savedAt: nowISO(),
+      team: this.cloneTeamConfig(team),
+    };
+  }
+
+  private triggerDownload(blob: Blob, filename: string): void {
+    if (typeof document === 'undefined') {
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+  }
+
+  private slugify(value: string): string {
+    return value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'team';
+  }
+
+  private loadStoredTeams(): StoredTeamEntry[] {
+    if (typeof localStorage === 'undefined') {
+      return [];
+    }
+    try {
+      const raw = localStorage.getItem(TEAM_STORAGE_KEY);
+      if (!raw) {
+        return [];
+      }
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        return [];
+      }
+      return parsed
+        .map((entry) => this.normalizeStoredTeam(entry))
+        .filter((entry): entry is StoredTeamEntry => entry !== null);
+    } catch (error) {
+      console.warn('Failed to load stored teams', error);
+      return [];
+    }
+  }
+
+  private normalizeStoredTeam(entry: unknown): StoredTeamEntry | null {
+    if (!entry || typeof entry !== 'object') {
+      return null;
+    }
+    const { id, name, updatedAt, team } = entry as {
+      id?: unknown;
+      name?: unknown;
+      updatedAt?: unknown;
+      team?: unknown;
+    };
+    if (
+      typeof id !== 'string' ||
+      typeof name !== 'string' ||
+      typeof updatedAt !== 'string' ||
+      !team ||
+      typeof team !== 'object'
+    ) {
+      return null;
+    }
+    return {
+      id,
+      name,
+      updatedAt,
+      team: this.cloneTeamConfig(team as TeamConfig),
+    };
+  }
+
+  private saveStoredTeams(entries: StoredTeamEntry[]): void {
+    if (typeof localStorage === 'undefined') {
+      return;
+    }
+    try {
+      localStorage.setItem(TEAM_STORAGE_KEY, JSON.stringify(entries));
+    } catch (error) {
+      console.warn('Failed to persist teams', error);
+    }
+  }
+
+  private rememberStoredTeam(team: TeamConfig): void {
+    const entry: StoredTeamEntry = {
+      id: team.id,
+      name: team.name,
+      updatedAt: nowISO(),
+      team: this.cloneTeamConfig(team),
+    };
+    let nextEntries: StoredTeamEntry[] = [];
+    this.storedTeams.update((entries) => {
+      nextEntries = [entry, ...entries.filter((existing) => existing.id !== entry.id)];
+      nextEntries.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      return nextEntries;
+    });
+    this.saveStoredTeams(nextEntries);
+  }
   readonly hoveredTokenId = computed(() => {
     const target = this.hoveredTarget();
     return target?.type === 'token' ? target.id : null;
@@ -666,8 +1056,8 @@ export class App implements OnDestroy {
     { kind: 'selection' } | { kind: 'tool'; tool: 'pen' | 'arrow' } | null
   >(null);
 
-  readonly leftPlayers = computed(() => this.leftTeam.players);
-  readonly rightPlayers = computed(() => this.rightTeam.players);
+  readonly leftPlayers = computed(() => this.leftTeamState().players);
+  readonly rightPlayers = computed(() => this.rightTeamState().players);
   readonly scene = computed(() => this.sceneSnapshot());
   readonly selectedToken = computed(() => {
     const id = this.selectedTokenId();
@@ -731,7 +1121,342 @@ export class App implements OnDestroy {
     this.showStartingPositions() ? 'An' : 'Aus'
   );
 
+  toggleTeamPanel(side: TeamSide): void {
+    this.teamCollapseState.update((state) => ({
+      ...state,
+      [side]: !state[side],
+    }));
+  }
+
+  isTeamPanelCollapsed(side: TeamSide): boolean {
+    return this.teamCollapseState()[side];
+  }
+
+  beginEditTeamName(side: TeamSide): void {
+    this.editingTeamNameState.set(side);
+    this.teamNameDrafts.update((drafts) => ({
+      ...drafts,
+      [side]: this.getTeamState(side).name,
+    }));
+    this.scheduleTeamNameFocus(side);
+  }
+
+  onTeamNameDraft(side: TeamSide, name: string): void {
+    this.teamNameDrafts.update((drafts) => ({
+      ...drafts,
+      [side]: name,
+    }));
+  }
+
+  finishTeamNameEdit(side: TeamSide): void {
+    const draft = this.teamNameDrafts()[side]?.trim() ?? '';
+    const nextName = draft.length > 0 ? draft : DEFAULT_TEAM_NAMES[side];
+    this.updateTeamState(side, (team) => ({
+      ...team,
+      name: nextName,
+    }));
+    this.editingTeamNameState.set(null);
+    this.pendingTeamNameFocus = null;
+    this.persistTeamState(side);
+  }
+
+  cancelTeamNameEdit(side?: TeamSide): void {
+    if (side) {
+      this.syncTeamNameDraft(side);
+    }
+    this.pendingTeamNameFocus = null;
+    this.editingTeamNameState.set(null);
+  }
+
+  updateTeamColor(side: TeamSide, key: 'primary' | 'secondary', value: string): void {
+    const fallback = key === 'primary'
+      ? DEFAULT_TEAM_COLORS[side].primary
+      : DEFAULT_TEAM_COLORS[side].secondary;
+    const normalized = value?.trim()?.length ? value : fallback;
+    this.updateTeamState(side, (team) => ({
+      ...team,
+      colors: {
+        ...team.colors,
+        [key]: normalized,
+      },
+    }));
+    this.persistTeamState(side);
+  }
+
+  handleTeamLogoSelected(side: TeamSide, fileList: FileList | null): void {
+    const file = fileList?.item(0);
+    if (!file) {
+      return;
+    }
+    if (!file.type.startsWith('image/')) {
+      console.warn('Selected logo is not an image.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : null;
+      if (!result) {
+        return;
+      }
+      this.updateTeamState(side, (team) => ({
+        ...team,
+        logoDataUrl: result,
+      }));
+      this.persistTeamState(side);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  clearTeamLogo(side: TeamSide): void {
+    this.updateTeamState(side, (team) => ({
+      ...team,
+      logoDataUrl: null,
+    }));
+    this.persistTeamState(side);
+  }
+
+  updateDraftName(side: TeamSide, name: string): void {
+    this.playerDrafts.update((drafts) => ({
+      ...drafts,
+      [side]: { ...drafts[side], name },
+    }));
+  }
+
+  setDraftPompfen(side: TeamSide, pompfenId: PompfenId | null): void {
+    this.playerDrafts.update((drafts) => ({
+      ...drafts,
+      [side]: { ...drafts[side], pompfenId },
+    }));
+  }
+
+  addPlayerFromDraft(side: TeamSide): void {
+    const draft = this.playerDrafts()[side];
+    const trimmed = draft.name.trim();
+    if (!trimmed) {
+      return;
+    }
+    const player: TeamPlayerConfig = {
+      id: this.createTeamPlayerId(side),
+      name: trimmed,
+      pompfenId: draft.pompfenId,
+    };
+    this.updateTeamState(side, (team) => ({
+      ...team,
+      players: [player, ...team.players],
+    }));
+    this.playerDrafts.update((drafts) => ({
+      ...drafts,
+      [side]: { name: '', pompfenId: draft.pompfenId },
+    }));
+    this.persistTeamState(side);
+  }
+
+  startEditingPlayer(side: TeamSide, playerId: string): void {
+    this.editingPlayerState.set({ side, playerId });
+  }
+
+  updatePlayerName(side: TeamSide, playerId: string, name: string): void {
+    this.updateTeamState(side, (team) => ({
+      ...team,
+      players: team.players.map((player) =>
+        player.id === playerId ? { ...player, name } : player
+      ),
+    }));
+  }
+
+  finishPlayerEdit(side: TeamSide, playerId: string): void {
+    const config = this.getTeamState(side);
+    const player = config.players.find((entry) => entry.id === playerId);
+    if (player) {
+      const trimmed = player.name.trim();
+      if (!trimmed) {
+        this.removePlayer(side, playerId);
+        this.editingPlayerState.set(null);
+        return;
+      }
+      if (trimmed !== player.name) {
+        this.updateTeamState(side, (team) => ({
+          ...team,
+          players: team.players.map((entry) =>
+            entry.id === playerId ? { ...entry, name: trimmed } : entry
+          ),
+        }));
+      }
+    }
+    this.editingPlayerState.set(null);
+    this.persistTeamState(side);
+  }
+
+  cancelPlayerEdit(): void {
+    this.editingPlayerState.set(null);
+  }
+
+  removePlayer(side: TeamSide, playerId: string): void {
+    this.updateTeamState(side, (team) => ({
+      ...team,
+      players: team.players.filter((player) => player.id !== playerId),
+    }));
+    this.persistTeamState(side);
+  }
+
+  assignPompfenToPlayer(side: TeamSide, playerId: string, pompfenId: PompfenId | null): void {
+    this.updateTeamState(side, (team) => ({
+      ...team,
+      players: team.players.map((player) =>
+        player.id === playerId ? { ...player, pompfenId } : player
+      ),
+    }));
+    this.persistTeamState(side);
+  }
+
+  openPompfenPickerForDraft(side: TeamSide): void {
+    this.pompfenPickerState.set({ side });
+  }
+
+  openPompfenPickerForPlayer(side: TeamSide, playerId: string): void {
+    this.pompfenPickerState.set({ side, playerId });
+  }
+
+  closePompfenPicker(): void {
+    this.pompfenPickerState.set(null);
+  }
+
+  choosePompfen(pompfenId: PompfenId | null): void {
+    const context = this.pompfenPickerState();
+    if (!context) {
+      return;
+    }
+    if (context.playerId) {
+      this.assignPompfenToPlayer(context.side, context.playerId, pompfenId);
+    } else {
+      this.setDraftPompfen(context.side, pompfenId);
+    }
+    this.closePompfenPicker();
+  }
+
+  isEditingPlayer(side: TeamSide, playerId: string): boolean {
+    const editing = this.editingPlayerState();
+    return editing?.side === side && editing?.playerId === playerId;
+  }
+
+  trackPlayer(_index: number, player: TeamPlayerConfig): string {
+    return player.id;
+  }
+
+  onTeamLogoClick(event: MouseEvent, side: TeamSide, input: HTMLInputElement): void {
+    event.preventDefault();
+    event.stopPropagation();
+    const team = this.getTeamState(side);
+    if (team.logoDataUrl) {
+      this.clearTeamLogo(side);
+      input.value = '';
+      return;
+    }
+    input.click();
+  }
+
+  private scheduleTeamNameFocus(side: TeamSide): void {
+    if (typeof document === 'undefined') {
+      return;
+    }
+    this.pendingTeamNameFocus = side;
+    queueMicrotask(() => {
+      if (this.pendingTeamNameFocus !== side) {
+        return;
+      }
+      const input = document.querySelector<HTMLInputElement>(
+        `[data-team-name-input="${side}"]`
+      );
+      if (input) {
+        input.focus();
+        input.select();
+      }
+      this.pendingTeamNameFocus = null;
+    });
+  }
+
+  allowPompfenDrop(event: DragEvent): void {
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'copy';
+    }
+  }
+
+  handlePompfenDropOnPlayer(event: DragEvent, side: TeamSide, playerId: string): void {
+    event.preventDefault();
+    const pompfenId = this.readPompfenId(event);
+    if (!pompfenId) {
+      return;
+    }
+    this.assignPompfenToPlayer(side, playerId, pompfenId);
+  }
+
+  handlePompfenDropOnDraft(event: DragEvent, side: TeamSide): void {
+    event.preventDefault();
+    const pompfenId = this.readPompfenId(event);
+    if (!pompfenId) {
+      return;
+    }
+    this.setDraftPompfen(side, pompfenId);
+  }
+
+  showTeamLoadDialog(side: TeamSide): void {
+    this.activeTeamDialog.set({ side, mode: 'load' });
+  }
+
+  closeTeamDialog(): void {
+    this.activeTeamDialog.set(null);
+  }
+
+  selectStoredTeam(side: TeamSide, storedId: string): void {
+    const entry = this.storedTeams().find((team) => team.id === storedId);
+    if (!entry) {
+      return;
+    }
+    this.applyTeamConfig(side, entry.team);
+    this.persistTeamState(side);
+    this.closeTeamDialog();
+  }
+
+  handleTeamFileInput(side: TeamSide, files: FileList | null): void {
+    const file = files?.item(0);
+    if (!file) {
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = typeof reader.result === 'string' ? reader.result : '';
+      try {
+        const payload = JSON.parse(text) as Partial<TeamFilePayload>;
+        if (payload?.schema !== TEAM_FILE_SCHEMA || payload?.version !== TEAM_FILE_VERSION) {
+          throw new Error('Unsupported team file format');
+        }
+        if (!payload.team) {
+          throw new Error('Team payload missing');
+        }
+        this.applyTeamConfig(side, this.normalizeImportedTeam(payload.team, side));
+        this.persistTeamState(side);
+        this.rememberStoredTeam(this.getTeamState(side));
+        this.closeTeamDialog();
+      } catch (error) {
+        console.error('Failed to load team file', error);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  exportTeam(side: TeamSide): void {
+    const team = this.getTeamState(side);
+    const payload = this.createTeamExportPayload(team);
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: 'application/json',
+    });
+    const filename = `${this.slugify(team.name)}-${nowISO()}.team.json`;
+    this.triggerDownload(blob, filename);
+    this.rememberStoredTeam(team);
+  }
   constructor() {
+    this.restoreTeamsFromStorage();
     this.toolRegistry.setActiveTool(this.selectedTool());
     this.applyPenConfiguration();
     this.applyArrowConfiguration();
@@ -2592,11 +3317,11 @@ export class App implements OnDestroy {
           palette: this.juggColors,
         };
       }
-      const player = [...this.leftTeam.players, ...this.rightTeam.players].find(
+      const player = [...this.leftTeam().players, ...this.rightTeam().players].find(
         (p) => p.id === token.playerId
       );
       const label = player
-        ? `${player.name}${player.number ? ` #${player.number}` : ''}`
+        ? `${player.name}${player.role ? ` - ${player.role}` : ''}`
         : `Token ${token.id}`;
       return {
         type: 'token',
@@ -3849,11 +4574,11 @@ export class App implements OnDestroy {
   }
 
   private getTeamColor(teamId: string): string | undefined {
-    if (teamId === this.leftTeam.id) {
-      return this.leftTeam.color;
+    if (teamId === this.leftTeam().id) {
+      return this.leftTeam().color;
     }
-    if (teamId === this.rightTeam.id) {
-      return this.rightTeam.color;
+    if (teamId === this.rightTeam().id) {
+      return this.rightTeam().color;
     }
     return undefined;
   }
@@ -3886,17 +4611,17 @@ export class App implements OnDestroy {
     if (!playerId) {
       return '?';
     }
-    const player = [...this.leftTeam.players, ...this.rightTeam.players].find(
+    const player = [...this.leftTeam().players, ...this.rightTeam().players].find(
       (p) => p.id === playerId
     );
-    return player?.number ?? player?.name.charAt(0) ?? '?';
+    return player?.name.charAt(0) ?? '?';
   }
 
   private getPlayerName(playerId: string | undefined): string | null {
     if (!playerId) {
       return null;
     }
-    const player = [...this.leftTeam.players, ...this.rightTeam.players].find(
+    const player = [...this.leftTeam().players, ...this.rightTeam().players].find(
       (p) => p.id === playerId
     );
     return player?.name ?? null;
@@ -4206,15 +4931,6 @@ export class App implements OnDestroy {
     return await new Promise((resolve) => {
       window.setTimeout(resolve, ms);
     });
-  }
-
-  private triggerDownload(blob: Blob, filename: string): void {
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.click();
-    URL.revokeObjectURL(url);
   }
 
   private buildExportBasename(option: AnimationFormatOption): string {
@@ -4587,3 +5303,8 @@ export class App implements OnDestroy {
     }
   }
 }
+
+
+
+
+
