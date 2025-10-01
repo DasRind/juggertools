@@ -261,7 +261,7 @@ type DragState =
 
 class SelectTool implements DrawTool {
   readonly id: DrawToolId = 'select';
-  readonly label = 'Select';
+  readonly label = 'Auswahl';
   readonly description = 'Elemente auswählen, verschieben und bearbeiten.';
 
   private hovered?: SelectTarget;
@@ -274,7 +274,10 @@ class SelectTool implements DrawTool {
       return;
     }
     const maybe = config as { tokenRadius?: unknown };
-    if (typeof maybe.tokenRadius === 'number' && Number.isFinite(maybe.tokenRadius)) {
+    if (
+      typeof maybe.tokenRadius === 'number' &&
+      Number.isFinite(maybe.tokenRadius)
+    ) {
       this.tokenRadius = Math.max(0.5, maybe.tokenRadius);
     }
   }
@@ -1019,7 +1022,7 @@ interface LinePointerSession {
 
 class LineTool implements DrawTool {
   readonly id: DrawToolId = 'line';
-  readonly label = 'Line';
+  readonly label = 'Linie';
   readonly description = 'Linien zeichnen und bearbeiten.';
 
   private readonly sessions = new Map<number, LinePointerSession>();
@@ -1053,7 +1056,9 @@ class LineTool implements DrawTool {
 
     if (context.type === 'down') {
       const scene = runtime.scene;
-      const editable = scene ? this.findEditableTarget(scene, point) : undefined;
+      const editable = scene
+        ? this.findEditableTarget(scene, point)
+        : undefined;
       if (editable) {
         this.selectedId = editable.drawing.id;
         this.sessions.set(pointerId, {
@@ -1213,7 +1218,10 @@ class LineTool implements DrawTool {
         this.removeLine(session.drawingId, runtime);
         if (this.selectedId === session.drawingId) {
           this.selectedId = undefined;
-          runtime.emit({ context, data: { kind: 'select', target: undefined } });
+          runtime.emit({
+            context,
+            data: { kind: 'select', target: undefined },
+          });
         }
       } else {
         const start = session.anchor;
@@ -1222,7 +1230,10 @@ class LineTool implements DrawTool {
           this.removeLine(session.drawingId, runtime);
           if (this.selectedId === session.drawingId) {
             this.selectedId = undefined;
-            runtime.emit({ context, data: { kind: 'select', target: undefined } });
+            runtime.emit({
+              context,
+              data: { kind: 'select', target: undefined },
+            });
           }
         }
       }
@@ -1236,16 +1247,26 @@ class LineTool implements DrawTool {
           },
         });
       }
-      runtime.emit({ context, data: { kind: 'line-end', drawingId: session.drawingId } });
+      runtime.emit({
+        context,
+        data: { kind: 'line-end', drawingId: session.drawingId },
+      });
       return;
     }
 
     if (context.type === 'cancel') {
-      this.applyLinePoints(runtime, session.drawingId, () => session.originalPoints);
+      this.applyLinePoints(
+        runtime,
+        session.drawingId,
+        () => session.originalPoints
+      );
     } else {
       this.updateActiveLine(session, point, runtime, context);
     }
-    runtime.emit({ context, data: { kind: 'line-end', drawingId: session.drawingId } });
+    runtime.emit({
+      context,
+      data: { kind: 'line-end', drawingId: session.drawingId },
+    });
   }
 
   private applyLinePoints(
@@ -1275,15 +1296,14 @@ class LineTool implements DrawTool {
   private findEditableTarget(
     scene: SceneSnapshot,
     point: { x: number; y: number }
-  ):
-    | { drawing: LineDrawing; mode: LinePointerSession['mode'] }
-    | undefined {
+  ): { drawing: LineDrawing; mode: LinePointerSession['mode'] } | undefined {
     const selectedId = this.selectedId;
     if (!selectedId) {
       return undefined;
     }
     const drawing = scene.scene.drawings.find(
-      (entry): entry is LineDrawing => entry.id === selectedId && entry.kind === 'line'
+      (entry): entry is LineDrawing =>
+        entry.id === selectedId && entry.kind === 'line'
     );
     if (!drawing) {
       return undefined;
@@ -1317,7 +1337,9 @@ class LineTool implements DrawTool {
       if (distance(end, point) <= LINE_HANDLE_RADIUS) {
         return drawing;
       }
-      if (this.isPointNearLine(drawing.points, point.x, point.y, drawing.width)) {
+      if (
+        this.isPointNearLine(drawing.points, point.x, point.y, drawing.width)
+      ) {
         return drawing;
       }
     }
@@ -1340,7 +1362,9 @@ class LineTool implements DrawTool {
       if (distance(end, point) <= LINE_HANDLE_RADIUS) {
         return { type: 'drawing', id: drawing.id, handle: 'end' };
       }
-      if (this.isPointNearLine(drawing.points, point.x, point.y, drawing.width)) {
+      if (
+        this.isPointNearLine(drawing.points, point.x, point.y, drawing.width)
+      ) {
         return { type: 'drawing', id: drawing.id };
       }
     }
@@ -1382,7 +1406,10 @@ class LineTool implements DrawTool {
     )}`;
   }
 
-  private isSameTarget(a?: SelectTarget | null, b?: SelectTarget | null): boolean {
+  private isSameTarget(
+    a?: SelectTarget | null,
+    b?: SelectTarget | null
+  ): boolean {
     if (!a && !b) {
       return true;
     }
@@ -1401,7 +1428,7 @@ class LineTool implements DrawTool {
 
 class PenTool implements DrawTool {
   readonly id: DrawToolId = 'pen';
-  readonly label = 'Pen';
+  readonly label = 'Stift';
   readonly description = 'Freihand-Linien zeichnen.';
 
   private readonly activeStrokeIds = new Map<number, string>();
@@ -1503,7 +1530,7 @@ class PenTool implements DrawTool {
 
 class ArrowTool implements DrawTool {
   readonly id: DrawToolId = 'arrow';
-  readonly label = 'Arrow';
+  readonly label = 'Pfeil';
   readonly description = 'Richtungs-Pfeile platzieren oder bearbeiten.';
   private color = '#facc15';
   private width = 2.5 * VISUAL_SCALE;
@@ -1552,11 +1579,7 @@ class ArrowTool implements DrawTool {
       }
 
       const candidate = scene
-        ? this.hitTestArrow(
-            scene.scene.drawings,
-            point.x,
-            point.y
-          )
+        ? this.hitTestArrow(scene.scene.drawings, point.x, point.y)
         : undefined;
       if (candidate) {
         if (this.selectedId !== candidate.state.drawingId) {
@@ -1804,8 +1827,10 @@ class ArrowTool implements DrawTool {
 
 class ConeTool implements DrawTool {
   readonly id: DrawToolId = 'cone';
-  readonly label = 'Cone';
+  readonly label = 'Bereich';
   readonly description = 'Zonen oder Marker platzieren/bearbeiten.';
+
+  private fill = 'rgba(34, 197, 94, 0.35)';
 
   private readonly active = new Map<
     number,
@@ -1816,6 +1841,16 @@ class ConeTool implements DrawTool {
       pointerOffset?: { dx: number; dy: number };
     }
   >();
+
+  configure(config: unknown): void {
+    if (!config || typeof config !== 'object') {
+      return;
+    }
+    const maybe = config as { color?: unknown };
+    if (typeof maybe.color === 'string') {
+      this.fill = maybe.color;
+    }
+  }
 
   handlePointer(context: PointerContext, runtime: DrawToolRuntime): void {
     const pointerId = context.originalEvent?.pointerId ?? 0;
@@ -1856,7 +1891,7 @@ class ConeTool implements DrawTool {
               kind: 'cone',
               at: origin,
               radius: 2 * VISUAL_SCALE,
-              fill: 'rgba(34, 197, 94, 0.35)',
+              fill: this.fill,
               meta: newDrawingMeta(),
             },
           ],
@@ -1979,7 +2014,7 @@ class ConeTool implements DrawTool {
 
 class EraserTool implements DrawTool {
   readonly id: DrawToolId = 'eraser';
-  readonly label = 'Eraser';
+  readonly label = 'Radierer';
   readonly description = 'Zeichnungen entfernen.';
   private radius = 3.2 * VISUAL_SCALE;
 

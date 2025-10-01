@@ -1,0 +1,48 @@
+<div class="team-dialog" *ngIf="state.teamDialog() as dialog">
+  <div
+    class="team-dialog__backdrop"
+    role="button"
+    tabindex="0"
+    (click)="state.closeTeamDialog()"
+    (keyup.enter)="state.closeTeamDialog()"
+    (keyup.space)="state.closeTeamDialog()"
+  ></div>
+  <div class="team-dialog__panel" role="dialog" aria-modal="true">
+    <header class="team-dialog__header">
+      <h3>Team laden</h3>
+      <p class="team-dialog__subtitle">
+        {{ dialog.side === 'left' ? 'Linkes Team' : 'Rechtes Team' }}
+      </p>
+    </header>
+    <section class="team-dialog__section">
+      <h4>Teamdatei hochladen</h4>
+      <label class="team-dialog__file">
+        <span>Datei auswaehlen</span>
+        <input
+          type="file"
+          accept="application/json,.json"
+          (change)="state.handleTeamFileInput(dialog.side, $any($event.target).files)"
+        />
+      </label>
+    </section>
+    <section class="team-dialog__section">
+      <h4>Gespeicherte Teams</h4>
+      <ng-container *ngIf="state.availableStoredTeams().length; else noStoredTeams">
+        <button
+          type="button"
+          class="team-dialog__stored"
+          *ngFor="let entry of state.availableStoredTeams()"
+          (click)="state.selectStoredTeam(dialog.side, entry.id)"
+        >
+          {{ entry.name }}
+        </button>
+      </ng-container>
+      <ng-template #noStoredTeams>
+        <p class="team-dialog__empty">Keine gespeicherten Teams gefunden.</p>
+      </ng-template>
+    </section>
+    <footer class="team-dialog__footer">
+      <button type="button" (click)="state.closeTeamDialog()">Schliessen</button>
+    </footer>
+  </div>
+</div>

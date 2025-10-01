@@ -1,0 +1,209 @@
+<aside
+  class="team-panel"
+  [class.team-panel--left]="side === 'left'"
+  [class.team-panel--right]="side === 'right'"
+  [class.team-panel--collapsed]="isPanelCollapsed()"
+>
+  <header class="team-panel__header">
+    <button
+      type="button"
+      class="team-panel__collapse"
+      (click)="state.toggleTeamPanel(side)"
+      [attr.aria-expanded]="!isPanelCollapsed()"
+      [attr.aria-controls]="panelId"
+    >
+      <span class="team-panel__collapse-icon" aria-hidden="true"></span>
+      <span class="sr-only">
+        {{ isPanelCollapsed() ? 'Team oeffnen' : 'Team einklappen' }}
+      </span>
+    </button>
+
+    <div class="team-panel__header-content">
+      <button
+        type="button"
+        class="team-panel__logo-button"
+        (click)="state.onTeamLogoClick($event, side, logoInput)"
+        [attr.aria-label]="teamConfig().logoDataUrl ? 'Teamlogo entfernen' : 'Teamlogo waehlen'"
+      >
+        <ng-container *ngIf="teamConfig().logoDataUrl as logo; else logoPlaceholder">
+          <img [src]="logo" alt="Team Logo" />
+        </ng-container>
+      </button>
+      <ng-template #logoPlaceholder>
+        <span>Logo</span>
+      </ng-template>
+      <input
+        #logoInput
+        class="sr-only"
+        type="file"
+        accept="image/*"
+        (change)="state.handleTeamLogoSelected(side, $any($event.target).files)"
+      />
+
+      <div class="team-panel__header-info">
+        <div class="team-panel__name-wrapper">
+          <button
+            type="button"
+            class="team-panel__name-display"
+            [class.team-panel__name-display--hidden]="isEditingName()"
+            (click)="state.beginEditTeamName(side)"
+          >
+            {{ teamConfig().name }}
+          </button>
+          <input
+            *ngIf="isEditingName()"
+            type="text"
+            class="team-panel__name-input"
+            [attr.data-team-name-input]="side"
+            [value]="teamNameDraft()"
+            (input)="state.onTeamNameDraft(side, $any($event.target).value)"
+            (blur)="state.finishTeamNameEdit(side)"
+            (keydown.enter)="state.finishTeamNameEdit(side)"
+            (keydown.escape)="state.cancelTeamNameEdit(side)"
+          />
+        </div>
+
+        <div class="team-panel__color-row">
+          <label class="team-panel__color-field">
+            <span>Farbe 1</span>
+            <input
+              type="color"
+              [value]="teamConfig().colors.primary"
+              (input)="state.updateTeamColor(side, 'primary', $any($event.target).value)"
+            />
+          </label>
+          <label class="team-panel__color-field">
+            <span>Farbe 2</span>
+            <input
+              type="color"
+              [value]="teamConfig().colors.secondary"
+              (input)="state.updateTeamColor(side, 'secondary', $any($event.target).value)"
+            />
+          </label>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="team-panel__body" [attr.id]="panelId" *ngIf="!isPanelCollapsed()">
+    @let draft = draftPlayer();
+    <div
+      class="team-panel__new-player"
+      (dragover)="state.allowPompfenDrop($event)"
+      (drop)="state.handlePompfenDropOnDraft($event, side)"
+    >
+      <button
+        type="button"
+        class="team-panel__new-player-icon"
+        (click)="state.openPompfenPickerForDraft(side)"
+        (dragover)="state.allowPompfenDrop($event)"
+        (drop)="state.handlePompfenDropOnDraft($event, side)"
+        [attr.aria-label]="draft?.pompfenId ? 'Pompfe aendern' : 'Pompfe waehlen'"
+      >
+        <ng-container *ngIf="draft?.pompfenId as draftPompfen; else draftPlaceholder">
+          <img
+            [src]="state.getPompfenIcon(draftPompfen ?? null) || ''"
+            [alt]="state.getPompfenTitle(draftPompfen ?? null) || 'Pompfe'"
+          />
+        </ng-container>
+      </button>
+      <ng-template #draftPlaceholder>
+        <span>+</span>
+      </ng-template>
+
+      <div class="team-panel__new-player-fields">
+        <input
+          type="text"
+          class="team-panel__new-player-input"
+          placeholder="Spieler hinzufuegen"
+          autocomplete="off"
+        [value]="draft?.name ?? ''"
+          (input)="state.updateDraftName(side, $any($event.target).value)"
+          (keydown.enter)="state.addPlayerFromDraft(side)"
+        />
+        <small>
+          {{ draft?.pompfenId ? state.getPompfenTitle(draft.pompfenId ?? null) : 'Pompfe waehlen' }}
+        </small>
+      </div>
+
+      <button
+        type="button"
+        class="team-panel__new-player-submit"
+        (click)="state.addPlayerFromDraft(side)"
+        [disabled]="!(draft?.name || '').trim().length"
+      >
+        Hinzufuegen
+      </button>
+    </div>
+
+    <ul class="player-list">
+      <li
+        *ngFor="let player of players(); trackBy: state.trackPlayer"
+        class="player-card"
+        draggable="true"
+        (dragstart)="state.onDragStart($event, player, teamDomain())"
+        (dragover)="state.allowPompfenDrop($event)"
+        (drop)="state.handlePompfenDropOnPlayer($event, side, player.id)"
+        [class.player-card--active]="playerTokenId(player) === state.selectedTokenId()"
+        [class.player-card--hover]="playerTokenId(player) === state.hoveredTokenId()"
+      >
+        <div class="player-card__main">
+          <button
+            type="button"
+            class="player-card__icon-button"
+            (click)="state.openPompfenPickerForPlayer(side, player.id)"
+            (dragover)="state.allowPompfenDrop($event)"
+            (drop)="state.handlePompfenDropOnPlayer($event, side, player.id)"
+            [attr.aria-label]="state.getPompfenTitle(player.pompfenId ?? null) ? 'Pompfe aendern' : 'Pompfe waehlen'"
+          >
+            <ng-container *ngIf="state.getPompfenIcon(player.pompfenId ?? null) as icon; else playerIconPlaceholder">
+              <img [src]="icon" [alt]="state.getPompfenTitle(player.pompfenId ?? null) || player.name" />
+            </ng-container>
+          </button>
+          <ng-template #playerIconPlaceholder>
+            <span>?</span>
+          </ng-template>
+
+          <div class="player-card__text">
+            <input
+              *ngIf="isEditingPlayer(player.id); else playerNameDisplay"
+              type="text"
+              class="player-card__input player-card__input--editing"
+              autocomplete="off"
+              [value]="player.name"
+              (input)="state.updatePlayerName(side, player.id, $any($event.target).value)"
+              (blur)="state.finishPlayerEdit(side, player.id)"
+              (keydown.enter)="state.finishPlayerEdit(side, player.id)"
+              (keydown.escape)="state.cancelPlayerEdit()"
+            />
+            <ng-template #playerNameDisplay>
+              <button
+                type="button"
+                class="player-card__name-button"
+                (click)="state.startEditingPlayer(side, player.id)"
+              >
+                {{ player.name }}
+              </button>
+            </ng-template>
+            <span class="player-card__role">
+              {{ state.getPompfenTitle(player.pompfenId) || 'Keine Pompfe' }}
+            </span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          class="player-card__remove"
+          (click)="state.removePlayer(side, player.id)"
+        >
+          &times;
+        </button>
+      </li>
+    </ul>
+
+    <div class="team-panel__footer">
+      <button type="button" (click)="state.showTeamLoadDialog(side)">Team laden</button>
+      <button type="button" (click)="state.exportTeam(side)">Team exportieren</button>
+    </div>
+  </div>
+</aside>

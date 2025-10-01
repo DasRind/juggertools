@@ -1,0 +1,43 @@
+<div class="pompfen-picker" *ngIf="state.pompfenPicker() as picker">
+  <div
+    class="pompfen-picker__backdrop"
+    role="button"
+    tabindex="0"
+    (click)="state.closePompfenPicker()"
+    (keyup.enter)="state.closePompfenPicker()"
+    (keyup.space)="state.closePompfenPicker()"
+  ></div>
+  <div class="pompfen-picker__panel" role="dialog" aria-modal="true">
+    <header class="pompfen-picker__header">
+      <h3>Pompfe waehlen</h3>
+      <p class="pompfen-picker__subtitle">
+        {{ picker.playerId ? 'Spieler' : 'Neuer Spieler' }}
+      </p>
+      <button
+        type="button"
+        class="pompfen-picker__close"
+        (click)="state.closePompfenPicker()"
+      >
+        ×
+      </button>
+    </header>
+    <div class="pompfen-picker__grid">
+      <button
+        type="button"
+        class="pompfen-picker__option"
+        *ngFor="let pompfen of state.pompfenOptions"
+        (click)="state.choosePompfen(pompfen.id)"
+      >
+        <img [src]="pompfen.icon" [alt]="pompfen.label" />
+        <span>{{ pompfen.label }}</span>
+      </button>
+    </div>
+    <button
+      type="button"
+      class="pompfen-picker__none"
+      (click)="state.choosePompfen(null)"
+    >
+      Keine Pompfe
+    </button>
+  </div>
+</div>

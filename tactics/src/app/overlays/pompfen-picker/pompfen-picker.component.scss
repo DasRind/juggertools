@@ -1,0 +1,124 @@
+.pompfen-picker {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1300;
+}
+
+.pompfen-picker__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  border: none;
+  cursor: pointer;
+}
+
+.pompfen-picker__backdrop:focus-visible {
+  outline: 2px solid #94a3b8;
+}
+
+.pompfen-picker__panel {
+  position: relative;
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 1.4rem;
+  width: min(420px, calc(100% - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.18);
+}
+
+.pompfen-picker__header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.pompfen-picker__header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.pompfen-picker__subtitle {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #64748b;
+  flex: 1;
+}
+
+.pompfen-picker__close {
+  border: none;
+  background: none;
+  font-size: 1.1rem;
+  color: #475467;
+  cursor: pointer;
+}
+
+.pompfen-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.8rem;
+}
+
+.pompfen-picker__option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 1.5px solid #cfd6e3;
+  border-radius: 12px;
+  padding: 0.65rem;
+  background: #f9fafe;
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.pompfen-picker__option:hover,
+.pompfen-picker__option:focus-visible {
+  transform: translateY(-2px);
+  border-color: #a0aec0;
+  background: #eef2ff;
+}
+
+.pompfen-picker__option img {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
+.pompfen-picker__none {
+  align-self: flex-end;
+  border: none;
+  background: none;
+  color: #475467;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+:host-context(.theme-dark) .pompfen-picker__panel {
+  background: #0f172a;
+  color: #e2e8f0;
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.55);
+}
+
+:host-context(.theme-dark) .pompfen-picker__option {
+  border-color: #34445f;
+  background: #1f2b3d;
+  color: #e2e8f0;
+}
+
+:host-context(.theme-dark) .pompfen-picker__option:hover,
+:host-context(.theme-dark) .pompfen-picker__option:focus-visible {
+  border-color: #425371;
+  background: #273347;
+}
+
+:host-context(.theme-dark) .pompfen-picker__none {
+  color: #cbd5f5;
+}

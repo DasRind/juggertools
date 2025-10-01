@@ -1,0 +1,17 @@
+<div
+  class="toast"
+  *ngIf="state.toast() as toast"
+  [class.toast--warning]="toast.intent === 'warning'"
+  [class.toast--error]="toast.intent === 'error'"
+>
+  <span>{{ toast.message }}</span>
+  <div class="toast__actions" *ngIf="toast.actions?.length">
+    <button
+      type="button"
+      *ngFor="let action of toast.actions"
+      (click)="state.onToastAction(toast, action)"
+    >
+      {{ action.label }}
+    </button>
+  </div>
+</div>
