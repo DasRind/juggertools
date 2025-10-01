@@ -145,7 +145,9 @@
                         </div>
                         <div class="status-card__grid status-card__grid--token">
                           <label class="status-card__field">
-                            <span class="status-card__field-label">Spielername</span>
+                            <span class="status-card__field-label"
+                              >Spielername</span
+                            >
                             <input
                               type="text"
                               [value]="selection.name || ''"
@@ -164,7 +166,9 @@
                           <label
                             class="status-card__field status-card__field--slider"
                           >
-                            <span class="status-card__field-label">Token-Größe</span>
+                            <span class="status-card__field-label"
+                              >Token-Größe</span
+                            >
                             <input
                               class="status-card__slider-input"
                               type="range"
@@ -327,7 +331,9 @@
                         </div>
                       </div>
                     </div>
-                    <label class="status-card__field status-card__field--slider">
+                    <label
+                      class="status-card__field status-card__field--slider"
+                    >
                       <span class="status-card__field-label">Strichstärke</span>
                       <input
                         class="status-card__slider-input"
@@ -396,7 +402,9 @@
                         </div>
                       </div>
                     </div>
-                    <label class="status-card__field status-card__field--slider">
+                    <label
+                      class="status-card__field status-card__field--slider"
+                    >
                       <span class="status-card__field-label">Linienstärke</span>
                       <input
                         class="status-card__slider-input"
@@ -465,7 +473,9 @@
                         </div>
                       </div>
                     </div>
-                    <label class="status-card__field status-card__field--slider">
+                    <label
+                      class="status-card__field status-card__field--slider"
+                    >
                       <span class="status-card__field-label">Strichstärke</span>
                       <input
                         class="status-card__slider-input"
@@ -545,8 +555,12 @@
                 </div>
                 <div class="status-card__body">
                   <div class="status-card__grid">
-                    <label class="status-card__field status-card__field--slider">
-                      <span class="status-card__field-label">Radierergröße</span>
+                    <label
+                      class="status-card__field status-card__field--slider"
+                    >
+                      <span class="status-card__field-label"
+                        >Radierergröße</span
+                      >
                       <input
                         class="status-card__slider-input"
                         type="range"
@@ -555,9 +569,7 @@
                         step="0.5"
                         [value]="state.eraserRadius()"
                         (input)="
-                          state.changeEraserRadius(
-                            $any($event.target).value
-                          )
+                          state.changeEraserRadius($any($event.target).value)
                         "
                       />
                       <span class="status-card__slider-value">
@@ -635,7 +647,7 @@
             for="workspace-tab-players"
             id="workspace-tab-players-label"
           >
-            Spieler hinzufügen
+            Spieler
           </label>
           <label
             class="tool-panels__tab"
@@ -701,127 +713,135 @@
                 <section class="workspace-section">
                   <h4 class="workspace-section__title">Ansicht</h4>
                   <div class="workspace-toggle-list">
-                  <button
-                    type="button"
-                    class="toggle-button"
-                    [class.toggle-button--active]="state.showPlayerNames()"
-                    (click)="state.togglePlayerNames()"
-                  >
-                    <span class="toggle-button__label">Spieler Namen:</span>
-                    <span class="toggle-button__value">{{
-                      state.playerNameToggleLabel()
-                    }}</span>
-                  </button>
-                  <button
-                    type="button"
-                    class="toggle-button"
-                    [class.toggle-button--active]="
-                      state.showStartingPositions()
-                    "
-                    (click)="state.toggleStartingPositions()"
-                  >
-                    <span class="toggle-button__label">Startpositionen:</span>
-                    <span class="toggle-button__value">{{
-                      state.startingPositionsToggleLabel()
-                    }}</span>
-                  </button>
-                  <button
-                    type="button"
-                    class="toggle-button"
-                    [class.toggle-button--active]="state.hasJugg()"
-                    (click)="state.spawnJugg()"
-                  >
-                    <span class="toggle-button__label">Jugg:</span>
-                    <span class="toggle-button__value">{{
-                      state.hasJugg() ? 'Neu zentrieren' : 'Platzieren'
-                    }}</span>
-                  </button>
-                </div>
-              </section>
-
-              <section class="workspace-section">
-                <h4 class="workspace-section__title">Feldfarben</h4>
-                <div class="field-settings__group">
-                  <label class="field-settings__option">
-                    <span>Feldfläche</span>
-                    <input
-                      #surfaceColorPicker
-                      type="color"
-                      [value]="state.fieldSurfaceColor()"
-                      (input)="
-                        state.updateFieldSurfaceColor(surfaceColorPicker.value)
-                      "
-                    />
-                  </label>
-                  <label class="field-settings__option">
-                    <span>Linien</span>
-                    <input
-                      #lineColorPicker
-                      type="color"
-                      [value]="state.fieldLineColor()"
-                      (input)="
-                        state.updateFieldLineColor(lineColorPicker.value)
-                      "
-                    />
-                  </label>
-                  <label class="field-settings__option">
-                    <span>Umrandung</span>
-                    <input
-                      #borderColorPicker
-                      type="color"
-                      [value]="state.fieldBoundaryColor()"
-                      (input)="
-                        state.updateFieldBoundaryColor(borderColorPicker.value)
-                      "
-                    />
-                  </label>
-                </div>
-              </section>
-
-              <section class="workspace-section">
-                <h4 class="workspace-section__title">Historie</h4>
-                <div class="history-indicator">
-                  <div class="history-indicator__row">
-                    <span>Undo</span>
-                    <div class="history-indicator__bar">
-                      <div
-                        class="history-indicator__fill"
-                        [style.width.%]="state.undoFill()"
-                      ></div>
-                    </div>
-                    <span
-                      >{{ state.undoDepth() }}/{{ state.historyCapacity }}</span
+                    <button
+                      type="button"
+                      class="toggle-button"
+                      [class.toggle-button--active]="state.showPlayerNames()"
+                      (click)="state.togglePlayerNames()"
                     >
-                  </div>
-                  <div class="history-indicator__row">
-                    <span>Redo</span>
-                    <div class="history-indicator__bar">
-                      <div
-                        class="history-indicator__fill history-indicator__fill--redo"
-                        [style.width.%]="state.redoFill()"
-                      ></div>
-                    </div>
-                    <span
-                      >{{ state.redoDepth() }}/{{ state.historyCapacity }}</span
+                      <span class="toggle-button__label">Spieler Namen:</span>
+                      <span class="toggle-button__value">{{
+                        state.playerNameToggleLabel()
+                      }}</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="toggle-button"
+                      [class.toggle-button--active]="
+                        state.showStartingPositions()
+                      "
+                      (click)="state.toggleStartingPositions()"
                     >
+                      <span class="toggle-button__label">Startpositionen:</span>
+                      <span class="toggle-button__value">{{
+                        state.startingPositionsToggleLabel()
+                      }}</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="toggle-button"
+                      [class.toggle-button--active]="state.hasJugg()"
+                      (click)="state.spawnJugg()"
+                    >
+                      <span class="toggle-button__label">Jugg:</span>
+                      <span class="toggle-button__value">{{
+                        state.hasJugg() ? 'Neu zentrieren' : 'Platzieren'
+                      }}</span>
+                    </button>
                   </div>
-                </div>
-                <div class="history-actions">
-                  <button
-                    type="button"
-                    (click)="state.undo()"
-                    [disabled]="!state.canUndo()"
-                  >
-                    Undo ({{ state.undoDepth() }})
-                  </button>
-                  <button
-                    type="button"
-                    (click)="state.redo()"
-                    [disabled]="!state.canRedo()"
-                  >
-                    Redo ({{ state.redoDepth() }})
-                  </button>
-                </div>
+                </section>
+
+                <section class="workspace-section">
+                  <h4 class="workspace-section__title">Feldfarben</h4>
+                  <div class="field-settings__group">
+                    <label class="field-settings__option">
+                      <span>Feldfläche</span>
+                      <input
+                        #surfaceColorPicker
+                        type="color"
+                        [value]="state.fieldSurfaceColor()"
+                        (input)="
+                          state.updateFieldSurfaceColor(
+                            surfaceColorPicker.value
+                          )
+                        "
+                      />
+                    </label>
+                    <label class="field-settings__option">
+                      <span>Linien</span>
+                      <input
+                        #lineColorPicker
+                        type="color"
+                        [value]="state.fieldLineColor()"
+                        (input)="
+                          state.updateFieldLineColor(lineColorPicker.value)
+                        "
+                      />
+                    </label>
+                    <label class="field-settings__option">
+                      <span>Umrandung</span>
+                      <input
+                        #borderColorPicker
+                        type="color"
+                        [value]="state.fieldBoundaryColor()"
+                        (input)="
+                          state.updateFieldBoundaryColor(
+                            borderColorPicker.value
+                          )
+                        "
+                      />
+                    </label>
+                  </div>
+                </section>
+
+                <section class="workspace-section">
+                  <h4 class="workspace-section__title">Historie</h4>
+                  <div class="history-indicator">
+                    <div class="history-indicator__row">
+                      <span>Undo</span>
+                      <div class="history-indicator__bar">
+                        <div
+                          class="history-indicator__fill"
+                          [style.width.%]="state.undoFill()"
+                        ></div>
+                      </div>
+                      <span
+                        >{{ state.undoDepth() }}/{{
+                          state.historyCapacity
+                        }}</span
+                      >
+                    </div>
+                    <div class="history-indicator__row">
+                      <span>Redo</span>
+                      <div class="history-indicator__bar">
+                        <div
+                          class="history-indicator__fill history-indicator__fill--redo"
+                          [style.width.%]="state.redoFill()"
+                        ></div>
+                      </div>
+                      <span
+                        >{{ state.redoDepth() }}/{{
+                          state.historyCapacity
+                        }}</span
+                      >
+                    </div>
+                  </div>
+                  <div class="history-actions">
+                    <button
+                      type="button"
+                      (click)="state.undo()"
+                      [disabled]="!state.canUndo()"
+                    >
+                      Undo ({{ state.undoDepth() }})
+                    </button>
+                    <button
+                      type="button"
+                      (click)="state.redo()"
+                      [disabled]="!state.canRedo()"
+                    >
+                      Redo ({{ state.redoDepth() }})
+                    </button>
+                  </div>
                 </section>
               </div>
             </div>
@@ -926,12 +946,14 @@
                   class="export-suite__action-button export-suite__action-button--accent"
                   (click)="state.exportAnimation()"
                   [disabled]="
-                    !state.canExportAnimation() ||
-                    state.isAnimationExporting()
+                    !state.canExportAnimation() || state.isAnimationExporting()
                   "
                 >
                   <ng-container
-                    *ngIf="!state.isAnimationExporting(); else exportingAnimation"
+                    *ngIf="
+                      !state.isAnimationExporting();
+                      else exportingAnimation
+                    "
                   >
                     Export Animation
                   </ng-container>
@@ -969,9 +991,7 @@
                     #resolutionSelect
                     class="field-area__resolution-select"
                     [value]="state.selectedExportResolution()"
-                    (change)="
-                      state.setExportResolution(resolutionSelect.value)
-                    "
+                    (change)="state.setExportResolution(resolutionSelect.value)"
                   >
                     <option
                       *ngFor="let option of state.exportResolutions"
@@ -1008,9 +1028,7 @@
                     class="field-area__resolution-select"
                     [value]="state.selectedAnimationDuration()"
                     (change)="
-                      state.setAnimationDuration(
-                        animationDurationSelect.value
-                      )
+                      state.setAnimationDuration(animationDurationSelect.value)
                     "
                   >
                     <option
