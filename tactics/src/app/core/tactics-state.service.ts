@@ -155,6 +155,70 @@ const TEAM_FILE_VERSION = 1 as const;
 const TEAM_STORAGE_KEY = 'juggertools:tactics:teams';
 const QUICK_TEAM_ID = 'quick-players';
 const QUICK_DEFAULT_COLOR = '#4fb28a';
+const DEMO_LEFT_COLOR = '#eab308';
+const DEMO_RIGHT_COLOR = '#38bdf8';
+const DEMO_FORMATION = [
+  {
+    name: 'Lang',
+    color: DEMO_LEFT_COLOR,
+    xFactor: 0.4102,
+    yFactor: 0.1626,
+  },
+  {
+    name: 'Stab',
+    color: DEMO_LEFT_COLOR,
+    xFactor: 0.4078,
+    yFactor: 0.372,
+  },
+  {
+    name: 'Läufi',
+    color: DEMO_LEFT_COLOR,
+    xFactor: 0.2751,
+    yFactor: 0.5048,
+  },
+  {
+    name: 'Kette',
+    color: DEMO_LEFT_COLOR,
+    xFactor: 0.4067,
+    yFactor: 0.6017,
+  },
+  {
+    name: 'Schild',
+    color: DEMO_LEFT_COLOR,
+    xFactor: 0.4019,
+    yFactor: 0.8015,
+  },
+  {
+    name: 'Q',
+    color: DEMO_RIGHT_COLOR,
+    xFactor: 0.5981,
+    yFactor: 0.1554,
+  },
+  {
+    name: 'Kette',
+    color: DEMO_RIGHT_COLOR,
+    xFactor: 0.5981,
+    yFactor: 0.3767,
+  },
+  {
+    name: 'Läufi',
+    color: DEMO_RIGHT_COLOR,
+    xFactor: 0.7213,
+    yFactor: 0.5144,
+  },
+  {
+    name: 'Schild',
+    color: DEMO_RIGHT_COLOR,
+    xFactor: 0.5898,
+    yFactor: 0.6017,
+  },
+  {
+    name: 'Lang',
+    color: DEMO_RIGHT_COLOR,
+    xFactor: 0.5957,
+    yFactor: 0.8111,
+  },
+] as const;
 const TOKEN_COLOR_OPTIONS = [
   '#f97316',
   '#facc15',
@@ -227,8 +291,9 @@ const DEFAULT_TOAST_DURATION_MS = 4000;
 const STORAGE_KEY = 'juggertools:tactics:session';
 const VISUAL_SCALE = 5.4;
 const TOKEN_BASE_RADIUS = 3.4 * VISUAL_SCALE;
+const DEFAULT_TOKEN_SCALE = 1.6;
 const TOKEN_SCALE_MIN = 0.6;
-const TOKEN_SCALE_MAX = 1.6;
+const TOKEN_SCALE_MAX = 1.8;
 const SELECTION_OUTLINE_EXTRA = 1.0 * VISUAL_SCALE;
 const SELECTED_OUTLINE_COLOR = 'rgba(248, 208, 208, 1)';
 const HOVER_OUTLINE_COLOR = 'rgba(215, 186, 186, 0.8)';
@@ -608,7 +673,7 @@ export class TacticsStateService {
   readonly showAnimationPanel = signal<boolean>(false);
   readonly showAdvancedPanel = signal<boolean>(false);
   readonly showExportPanel = signal<boolean>(false);
-  readonly tokenScale = signal<number>(1);
+  readonly tokenScale = signal<number>(DEFAULT_TOKEN_SCALE);
   readonly strokeWidthFactor = signal<number>(1);
   readonly fieldZoom = signal<number>(1);
   readonly tokenScaleMin = TOKEN_SCALE_MIN;
@@ -1512,6 +1577,71 @@ export class TacticsStateService {
     });
   }
 
+  createDemoPlayer(): void {
+    const desiredTokenScale = DEFAULT_TOKEN_SCALE;
+    if (this.tokenScale() < desiredTokenScale) {
+      this.tokenScale.set(Math.min(desiredTokenScale, this.tokenScaleMax));
+    }
+
+    const quickPlayers: Record<string, QuickPlayer> = {};
+
+    this.applySceneUpdate((snapshot) => {
+      const { field } = snapshot.scene;
+
+      const baseTokens = snapshot.scene.tokens.filter(
+        (token) => token.teamId !== QUICK_TEAM_ID
+      );
+
+      const createdTokens = DEMO_FORMATION.map((definition) => {
+        const playerId = this.createQuickPlayerId();
+        const tokenId = this.createTokenId(playerId);
+
+        const x = field.width * definition.xFactor;
+        const y = field.height * definition.yFactor;
+
+        quickPlayers[playerId] = {
+          id: playerId,
+          tokenId,
+          name: definition.name,
+          color: definition.color,
+          pompfenId: null,
+        };
+
+        return {
+          id: tokenId,
+          teamId: QUICK_TEAM_ID,
+          playerId,
+          x,
+          y,
+          color: definition.color,
+          label: definition.name,
+        } as Token;
+      });
+
+      const tokensWithDemo = [...baseTokens, ...createdTokens];
+
+      const hasJugg = tokensWithDemo.some((token) => token.id === JUGG_ID);
+      return {
+        ...snapshot,
+        scene: {
+          ...snapshot.scene,
+          tokens: hasJugg ? tokensWithDemo : [...tokensWithDemo, this.createJuggToken(field)],
+        },
+      };
+    });
+
+    this.quickPlayersState.set(quickPlayers);
+    this.quickAddDraft.set({
+      name: '',
+      color: QUICK_DEFAULT_COLOR,
+      pompfenId: null,
+    });
+    this.selectedTarget.set(null);
+    this.hoveredTarget.set(null);
+    this.selectTool('select');
+    this.spawnJugg();
+  }
+
   startEditingPlayer(side: TeamSide, playerId: string): void {
     this.editingPlayerState.set({ side, playerId });
   }
@@ -1767,6 +1897,9 @@ export class TacticsStateService {
       }
     });
     this.loadPersistedSession();
+    if (!this.pendingSession && !this.hasQuickPlayersInScene()) {
+      this.createDemoPlayer();
+    }
   }
 
   destroy(): void {
@@ -2215,13 +2348,12 @@ export class TacticsStateService {
     this.toolRegistry.configureTool('select', {
       tokenRadius: this.getTokenRadius(scale),
     });
-    this.updateJuggTokenDimensions(scale);
+    this.updateJuggTokenDimensions();
     this.engine?.draw();
   }
 
-  private updateJuggTokenDimensions(scale: number): void {
-    const width = JUGG_WIDTH * scale;
-    const height = JUGG_HEIGHT * scale;
+  private updateJuggTokenDimensions(): void {
+    const { width, height } = this.getJuggDimensions();
     const current = this.sceneSnapshot();
     const needsUpdate = current.scene.tokens.some((token) => {
       if (token.shape !== 'rectangle') {
@@ -2617,9 +2749,7 @@ export class TacticsStateService {
       const field = state.scene.field;
       const centerX = field.width / 2;
       const centerY = field.height / 2;
-      const { width: juggWidth, height: juggHeight } = this.getJuggDimensions(
-        this.tokenScale()
-      );
+      const { width: juggWidth, height: juggHeight } = this.getJuggDimensions();
       const tokens = state.scene.tokens;
       const existingIndex = tokens.findIndex((token) => token.id === JUGG_ID);
       if (existingIndex >= 0) {
@@ -4803,7 +4933,7 @@ export class TacticsStateService {
     );
     const scaleFactor = this.tokenScale();
     const baseRadius = this.getTokenRadius(scaleFactor);
-    const defaultJugg = this.getJuggDimensions(scaleFactor);
+    const defaultJugg = this.getJuggDimensions();
 
     const tokens = [...snapshot.scene.tokens];
     const tokenPriority = (token: Token): number => {
@@ -4930,18 +5060,27 @@ export class TacticsStateService {
       });
       const deviceRadius = tokenRadius * scale;
       const tokenLabel = token.label ?? this.getTokenLabel(token.playerId);
-      const playerName = showNames ? this.getPlayerName(token.playerId) : null;
+      const isQuickToken = token.teamId === QUICK_TEAM_ID;
+      const playerName =
+        showNames && !isQuickToken ? this.getPlayerName(token.playerId) : null;
 
       ctx.save();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.shadowColor = 'transparent';
       ctx.textAlign = 'center';
 
-      const numberFontSize = Math.max(12, deviceRadius * 0.8);
-      ctx.fillStyle = '#1f2937';
-      ctx.font = `${numberFontSize}px Inter, sans-serif`;
-      ctx.textBaseline = 'middle';
-      ctx.fillText(tokenLabel, canvasPoint.x, canvasPoint.y);
+      const trimmedLabel = tokenLabel.trim();
+      if (trimmedLabel) {
+        const labelFontSize = this.getTokenLabelFontSize(
+          ctx,
+          trimmedLabel,
+          deviceRadius
+        );
+        ctx.fillStyle = '#1f2937';
+        ctx.font = `${labelFontSize}px Inter, sans-serif`;
+        ctx.textBaseline = 'middle';
+        ctx.fillText(trimmedLabel, canvasPoint.x, canvasPoint.y);
+      }
 
       if (playerName) {
         const trimmed = playerName.trim();
@@ -5071,10 +5210,29 @@ export class TacticsStateService {
     return TOKEN_BASE_RADIUS * scale;
   }
 
-  private getJuggDimensions(
-    scale = this.tokenScale()
-  ): { width: number; height: number } {
-    return { width: JUGG_WIDTH * scale, height: JUGG_HEIGHT * scale };
+  private getJuggDimensions(): { width: number; height: number } {
+    return { width: JUGG_WIDTH, height: JUGG_HEIGHT };
+  }
+
+  private createJuggToken(field: { width: number; height: number }): Token {
+    const centerX = field.width / 2;
+    const centerY = field.height / 2;
+    const { width, height } = this.getJuggDimensions();
+    return {
+      id: JUGG_ID,
+      teamId: JUGG_TEAM_ID,
+      x: centerX,
+      y: centerY,
+      color: DEFAULT_JUGG_COLOR,
+      shape: 'rectangle',
+      width,
+      height,
+    };
+  }
+
+  private hasQuickPlayersInScene(): boolean {
+    return this.sceneSnapshot()
+      .scene.tokens.some((token) => token.teamId === QUICK_TEAM_ID);
   }
 
   private getTokenFillColor(token: Token): string {
@@ -5095,6 +5253,32 @@ export class TacticsStateService {
       (p) => p.id === playerId
     );
     return player?.name.charAt(0) ?? '?';
+  }
+
+  private getTokenLabelFontSize(
+    ctx: CanvasRenderingContext2D,
+    text: string,
+    deviceRadius: number
+  ): number {
+    const maxDiameter = deviceRadius * 2;
+    const targetWidth = maxDiameter * 0.88;
+    const targetHeight = maxDiameter * 0.9;
+    let fontSize = Math.max(12, deviceRadius * 1.25);
+
+    for (let iteration = 0; iteration < 16; iteration += 1) {
+      ctx.font = `${fontSize}px Inter, sans-serif`;
+      const metrics = ctx.measureText(text);
+      const width = metrics.width;
+      const ascent = metrics.actualBoundingBoxAscent || fontSize * 0.75;
+      const descent = metrics.actualBoundingBoxDescent || fontSize * 0.25;
+      const height = ascent + descent;
+      if (width <= targetWidth && height <= targetHeight) {
+        break;
+      }
+      fontSize *= 0.92;
+    }
+
+    return Math.max(10, fontSize);
   }
 
   private getPlayerName(playerId: string | undefined): string | null {

@@ -186,7 +186,7 @@
                               {{ state.tokenScaleLabel() }}
                             </span>
                           </label>
-                          <label class="status-card__field">
+                          <!-- <label class="status-card__field">
                             <span class="status-card__field-label">Pompfe</span>
                             <div class="status-card__pompfen">
                               <button
@@ -216,7 +216,7 @@
                                 <img [src]="option.icon" [alt]="option.title" />
                               </button>
                             </div>
-                          </label>
+                          </label> -->
                           <label class="status-card__field">
                             <span class="status-card__field-label">Farbe</span>
                             <div class="status-card__color">
@@ -852,6 +852,13 @@
             class="tool-panels__panel tool-panels__panel--players workspace-card"
             aria-labelledby="workspace-tab-players-label"
           >
+            <button
+              type="button"
+              class="quick-add__demo-button"
+              (click)="state.createDemoPlayer()"
+            >
+              Demo Spieler hinzufügen
+            </button>
             <h3 class="tool-panels__title">Spieler hinzufügen</h3>
             <div class="quick-add__form">
               <label class="quick-add__field">
@@ -862,33 +869,6 @@
                   (input)="state.updateQuickAddName($any($event.target).value)"
                   (keydown.enter)="state.createQuickPlayer()"
                 />
-              </label>
-              <label class="quick-add__field">
-                <span>Pompfe</span>
-                <div class="quick-add__pompfen">
-                  <button
-                    type="button"
-                    class="quick-add__pompfen-option"
-                    [class.quick-add__pompfen-option--active]="
-                      !state.quickAddDraft().pompfenId
-                    "
-                    (click)="state.updateQuickAddPompfen(null)"
-                  >
-                    <span>Keine</span>
-                  </button>
-                  <button
-                    type="button"
-                    class="quick-add__pompfen-option"
-                    *ngFor="let option of state.pompfenOptions"
-                    [class.quick-add__pompfen-option--active]="
-                      state.quickAddDraft().pompfenId === option.id
-                    "
-                    (click)="state.updateQuickAddPompfen(option.id)"
-                    [attr.aria-label]="option.title"
-                  >
-                    <img [src]="option.icon" [alt]="option.title" />
-                  </button>
-                </div>
               </label>
               <label class="quick-add__field">
                 <span>Farbe</span>
