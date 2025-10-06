@@ -1,5 +1,5 @@
 <section class="generator">
-  <!-- <ng-template #formationTpl>
+  <ng-template #formationTpl>
     <div class="line">
       @if (topRow().length === 4) { @for (s of topRow(); let idx = $index; track
       trackTop(idx, s)) {
@@ -23,6 +23,8 @@
       } }
     </div>
 
+    WHAT
+
     <div class="quick">
       @if (quickSlot(); as q) { @for (_ of [q]; track trackByQuick()) {
       <article
@@ -43,7 +45,7 @@
       </article>
       }
     </div>
-  </ng-template> -->
+  </ng-template>
   <div class="team-status" [class.team-status--loading]="teamLoading()">
     @if (teamLoading()) {
     <div class="team-status__row">
