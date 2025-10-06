@@ -1,5 +1,5 @@
 <section class="generator">
-  <ng-template #formationTpl>
+  <!-- <ng-template #formationTpl>
     <div class="line">
       @if (topRow().length === 4) { @for (s of topRow(); let idx = $index; track
       trackTop(idx, s)) {
@@ -43,7 +43,7 @@
       </article>
       }
     </div>
-  </ng-template>
+  </ng-template> -->
   <div class="team-status" [class.team-status--loading]="teamLoading()">
     @if (teamLoading()) {
     <div class="team-status__row">
@@ -61,9 +61,9 @@
       <div class="team-status__text">
         <div class="team-status__line">
           <span class="team-status__label">Team</span>
-          <span class="team-status__value">{{
-            teamLabel() || "Eigenes Team"
-          }}</span>
+          <span class="team-status__value"
+            >{{ teamLabel() || "Eigenes Team" }}</span
+          >
         </div>
         <div class="team-status__meta">
           @if (currentTeamId()) {
@@ -267,7 +267,9 @@
               </figure>
               <div class="text">
                 <div class="name">{{ s.player.name }}</div>
-                <div class="tag" [ngClass]="tagClass(s.role)">{{ s.kindLabel }}</div>
+                <div class="tag" [ngClass]="tagClass(s.role)">
+                  {{ s.kindLabel }}
+                </div>
               </div>
             </article>
             } } @else { @for (_ of [0,1,2,3]; let idx = $index; track idx) {
@@ -305,7 +307,9 @@
                 </figure>
                 <div class="text">
                   <div class="name">{{ q.player.name }}</div>
-                  <div class="tag" [ngClass]="tagClass(q.role)">{{ q.kindLabel }}</div>
+                  <div class="tag" [ngClass]="tagClass(q.role)">
+                    {{ q.kindLabel }}
+                  </div>
                 </div>
               </article>
               } } @else {
