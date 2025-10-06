@@ -1,0 +1,28 @@
+@if (show()) {
+  <section class="shell">
+    <section class="content">
+      <button
+        type="button"
+        class="close"
+        (click)="close()"
+        aria-label="Popup schließen"
+      >
+        ×
+      </button>
+      <h1 class="headingBig">Unterstütze mich und solche Projekte! 🐮</h1>
+      <img src="{{ donateImagePath() }}" alt="" class="image" />
+      <p class="description">Gibt kein wenig oder viel, alles hilft.</p>
+
+      <div class="linkCotainer">
+        <a
+          href="https://paypal.me/daslebenderind/5?currency_code=EUR"
+          class="link"
+          >Paypal</a
+        >
+      </div>
+      <button type="button" class="dismiss" (click)="dismissForever()">
+        Zeige mir das nie wieder
+      </button>
+    </section>
+  </section>
+}

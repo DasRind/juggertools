@@ -23,9 +23,13 @@
         type="button"
         class="team-panel__logo-button"
         (click)="state.onTeamLogoClick($event, side, logoInput)"
-        [attr.aria-label]="teamConfig().logoDataUrl ? 'Teamlogo entfernen' : 'Teamlogo waehlen'"
+        [attr.aria-label]="
+          teamConfig().logoDataUrl ? 'Teamlogo entfernen' : 'Teamlogo waehlen'
+        "
       >
-        <ng-container *ngIf="teamConfig().logoDataUrl as logo; else logoPlaceholder">
+        <ng-container
+          *ngIf="teamConfig().logoDataUrl as logo; else logoPlaceholder"
+        >
           <img [src]="logo" alt="Team Logo" />
         </ng-container>
       </button>
@@ -69,7 +73,13 @@
             <input
               type="color"
               [value]="teamConfig().colors.primary"
-              (input)="state.updateTeamColor(side, 'primary', $any($event.target).value)"
+              (input)="
+                state.updateTeamColor(
+                  side,
+                  'primary',
+                  $any($event.target).value
+                )
+              "
             />
           </label>
           <label class="team-panel__color-field">
@@ -77,7 +87,13 @@
             <input
               type="color"
               [value]="teamConfig().colors.secondary"
-              (input)="state.updateTeamColor(side, 'secondary', $any($event.target).value)"
+              (input)="
+                state.updateTeamColor(
+                  side,
+                  'secondary',
+                  $any($event.target).value
+                )
+              "
             />
           </label>
         </div>
@@ -98,9 +114,13 @@
         (click)="state.openPompfenPickerForDraft(side)"
         (dragover)="state.allowPompfenDrop($event)"
         (drop)="state.handlePompfenDropOnDraft($event, side)"
-        [attr.aria-label]="draft?.pompfenId ? 'Pompfe aendern' : 'Pompfe waehlen'"
+        [attr.aria-label]="
+          draft?.pompfenId ? 'Pompfe aendern' : 'Pompfe waehlen'
+        "
       >
-        <ng-container *ngIf="draft?.pompfenId as draftPompfen; else draftPlaceholder">
+        <ng-container
+          *ngIf="draft?.pompfenId as draftPompfen; else draftPlaceholder"
+        >
           <img
             [src]="state.getPompfenIcon(draftPompfen ?? null) || ''"
             [alt]="state.getPompfenTitle(draftPompfen ?? null) || 'Pompfe'"
@@ -117,12 +137,16 @@
           class="team-panel__new-player-input"
           placeholder="Spieler hinzufuegen"
           autocomplete="off"
-        [value]="draft?.name ?? ''"
+          [value]="draft?.name ?? ''"
           (input)="state.updateDraftName(side, $any($event.target).value)"
           (keydown.enter)="state.addPlayerFromDraft(side)"
         />
         <small>
-          {{ draft?.pompfenId ? state.getPompfenTitle(draft.pompfenId ?? null) : 'Pompfe waehlen' }}
+          {{
+            draft?.pompfenId
+              ? state.getPompfenTitle(draft.pompfenId ?? null)
+              : 'Pompfe waehlen'
+          }}
         </small>
       </div>
 
@@ -144,8 +168,12 @@
         (dragstart)="state.onDragStart($event, player, teamDomain())"
         (dragover)="state.allowPompfenDrop($event)"
         (drop)="state.handlePompfenDropOnPlayer($event, side, player.id)"
-        [class.player-card--active]="playerTokenId(player) === state.selectedTokenId()"
-        [class.player-card--hover]="playerTokenId(player) === state.hoveredTokenId()"
+        [class.player-card--active]="
+          playerTokenId(player) === state.selectedTokenId()
+        "
+        [class.player-card--hover]="
+          playerTokenId(player) === state.hoveredTokenId()
+        "
       >
         <div class="player-card__main">
           <button
@@ -154,10 +182,24 @@
             (click)="state.openPompfenPickerForPlayer(side, player.id)"
             (dragover)="state.allowPompfenDrop($event)"
             (drop)="state.handlePompfenDropOnPlayer($event, side, player.id)"
-            [attr.aria-label]="state.getPompfenTitle(player.pompfenId ?? null) ? 'Pompfe aendern' : 'Pompfe waehlen'"
+            [attr.aria-label]="
+              state.getPompfenTitle(player.pompfenId ?? null)
+                ? 'Pompfe aendern'
+                : 'Pompfe waehlen'
+            "
           >
-            <ng-container *ngIf="state.getPompfenIcon(player.pompfenId ?? null) as icon; else playerIconPlaceholder">
-              <img [src]="icon" [alt]="state.getPompfenTitle(player.pompfenId ?? null) || player.name" />
+            <ng-container
+              *ngIf="
+                state.getPompfenIcon(player.pompfenId ?? null) as icon;
+                else playerIconPlaceholder
+              "
+            >
+              <img
+                [src]="icon"
+                [alt]="
+                  state.getPompfenTitle(player.pompfenId ?? null) || player.name
+                "
+              />
             </ng-container>
           </button>
           <ng-template #playerIconPlaceholder>
@@ -171,7 +213,13 @@
               class="player-card__input player-card__input--editing"
               autocomplete="off"
               [value]="player.name"
-              (input)="state.updatePlayerName(side, player.id, $any($event.target).value)"
+              (input)="
+                state.updatePlayerName(
+                  side,
+                  player.id,
+                  $any($event.target).value
+                )
+              "
               (blur)="state.finishPlayerEdit(side, player.id)"
               (keydown.enter)="state.finishPlayerEdit(side, player.id)"
               (keydown.escape)="state.cancelPlayerEdit()"
@@ -202,8 +250,12 @@
     </ul>
 
     <div class="team-panel__footer">
-      <button type="button" (click)="state.showTeamLoadDialog(side)">Team laden</button>
-      <button type="button" (click)="state.exportTeam(side)">Team exportieren</button>
+      <button type="button" (click)="state.showTeamLoadDialog(side)">
+        Team laden
+      </button>
+      <button type="button" (click)="state.exportTeam(side)">
+        Team exportieren
+      </button>
     </div>
   </div>
 </aside>

@@ -25,7 +25,9 @@ export class TeamPanelComponent {
   }
 
   teamDomain() {
-    return this.side === 'left' ? this.state.leftTeam() : this.state.rightTeam();
+    return this.side === 'left'
+      ? this.state.leftTeam()
+      : this.state.rightTeam();
   }
 
   teamNameDraft() {
@@ -52,7 +54,9 @@ export class TeamPanelComponent {
 
   isEditingPlayer(playerId: string): boolean {
     const current = this.state.editingPlayer();
-    return !!current && current.side === this.side && current.playerId === playerId;
+    return (
+      !!current && current.side === this.side && current.playerId === playerId
+    );
   }
 
   playerTokenId(player: { id: string }): string | null {

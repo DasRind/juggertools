@@ -1,3 +1,8 @@
+<app-popup
+  [showPopup]="showPopup()"
+  (showPopupChange)="showPopup.set($event)"
+  [donateImagePath]="donateImagePath()"
+></app-popup>
 <section class="workspace" id="top">
   <div class="workspace__grid">
     <div class="workspace__main">
