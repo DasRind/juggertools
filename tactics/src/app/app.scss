@@ -1,9 +1,13 @@
 :host {
   display: block;
-  min-height: 100vh;
-  background: #f4f6fb;
-  color: #1f2937;
+  background: var(--app-shell-bg, #f4f6fb);
+  color: var(--app-shell-text, #1f2937);
   font-family: 'Manrope', 'Inter', 'Segoe UI', sans-serif;
+}
+
+:host-context(.theme-dark) {
+  --app-shell-bg: #050a17;
+  --app-shell-text: #e2e8f0;
 }
 
 .app-main {

@@ -13,6 +13,10 @@ import { TacticsStateService } from '../../core/tactics-state.service';
   standalone: true,
   templateUrl: './site-header.component.html',
   styleUrl: './site-header.component.scss',
+  host: {
+    '[class.theme-dark]': 'isDarkMode()',
+    '[class.theme-light]': '!isDarkMode()',
+  },
 })
 export class SiteHeaderComponent implements AfterViewInit, OnDestroy {
   private readonly state = inject(TacticsStateService);

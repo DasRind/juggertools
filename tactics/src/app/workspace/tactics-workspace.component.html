@@ -6,52 +6,77 @@
 <section class="workspace" id="top">
   <div class="workspace__grid">
     <div class="workspace__main">
-      <div class="workspace__main-row">
-        <div class="workspace__field-column">
-          <div class="workspace__field-surface">
-            <div class="field-surface__controls">
-              <button
-                type="button"
-                class="field-surface__button"
-                (click)="state.toggleFieldRotation()"
-                [attr.aria-pressed]="state.isFieldRotated()"
-                aria-label="Feld um 90° drehen"
-              >
-                ⟳
-              </button>
-              <button
-                type="button"
-                class="field-surface__button field-surface__button--clear"
-                (click)="state.clearField()"
-                aria-label="Feld löschen"
-                title="Feld löschen"
-              >
-                🗑
-              </button>
+      <div
+        class="workspace__canvas"
+        [class.workspace__canvas--rotated]="state.isFieldRotated()"
+      >
+        <div class="workspace__field-layout">
+          <nav class="workspace__tool-rail" aria-label="Werkzeuge">
+            <button
+              type="button"
+              class="tool-rail__button"
+              *ngFor="let tool of state.toolShortcuts"
+              [class.tool-rail__button--active]="tool.id === state.selectedTool()"
+              (click)="state.selectTool(tool.id)"
+              [attr.aria-pressed]="tool.id === state.selectedTool()"
+              [attr.aria-label]="tool.label"
+              [title]="tool.label + ' (' + tool.shortcut + ')'"
+            >
+              <img
+                class="tool-rail__icon"
+                [src]="toolIconPath(tool.id)"
+                alt=""
+                loading="lazy"
+              />
+            </button>
+          </nav>
+          <div class="workspace__field-column">
+            <div class="workspace__field-surface">
+              <div class="field-surface__controls">
+                <button
+                  *ngIf="!isRotationLocked()"
+                  type="button"
+                  class="field-surface__button"
+                  (click)="state.toggleFieldRotation()"
+                  [attr.aria-pressed]="state.isFieldRotated()"
+                  aria-label="Feld um 90° drehen"
+                >
+                  ⟳
+                </button>
+                <button
+                  type="button"
+                  class="field-surface__button field-surface__button--clear"
+                  (click)="state.clearField()"
+                  aria-label="Feld löschen"
+                  title="Feld löschen"
+                >
+                  🗑
+                </button>
+              </div>
+              <jugger-field
+                class="field-component"
+                [scene]="state.scene()"
+                [flipHorizontal]="state.isFieldFlipped()"
+                [rotateQuarterTurn]="state.isFieldRotated()"
+                [style.aspect-ratio]="state.fieldAspectRatio()"
+                [zoom]="state.fieldZoom()"
+                [viewportSync]="state.viewportSyncToken()"
+                (engineReady)="state.handleEngineReady($event)"
+                (viewportChange)="state.handleViewportChange($event)"
+                (pointerDown)="state.handlePointer($event)"
+                (pointerMove)="state.handlePointer($event)"
+                (pointerUp)="state.handlePointer($event)"
+                (pointerCancel)="state.handlePointer($event)"
+              ></jugger-field>
             </div>
-            <jugger-field
-              class="field-component"
-              [scene]="state.scene()"
-              [flipHorizontal]="state.isFieldFlipped()"
-              [rotateQuarterTurn]="state.isFieldRotated()"
-              [style.aspect-ratio]="state.fieldAspectRatio()"
-              [zoom]="state.fieldZoom()"
-              [viewportSync]="state.viewportSyncToken()"
-              (engineReady)="state.handleEngineReady($event)"
-              (viewportChange)="state.handleViewportChange($event)"
-              (pointerDown)="state.handlePointer($event)"
-              (pointerMove)="state.handlePointer($event)"
-              (pointerUp)="state.handlePointer($event)"
-              (pointerCancel)="state.handlePointer($event)"
-            ></jugger-field>
           </div>
         </div>
-      </div>
-      <section class="status-card status-card--panel">
-        <ng-container *ngIf="state.toolStatus() as tool">
-          <ng-container [ngSwitch]="tool.kind">
-            <ng-container *ngSwitchCase="'select'">
-              <div class="status-card__tool">
+        <div class="workspace__details">
+          <section class="status-card status-card--panel">
+            <ng-container *ngIf="state.toolStatus() as tool">
+            <ng-container [ngSwitch]="tool.kind">
+              <ng-container *ngSwitchCase="'select'">
+                <div class="status-card__tool">
                 <div class="field-status__actions">
                   <span class="field-status__value">{{ tool.label }}</span>
                 </div>
@@ -130,7 +155,9 @@
                     </ng-template>
                     <ng-container
                       *ngIf="
-                        selection.type === 'token';
+                        selection.type === 'token' ||
+                        selection.type === 'token-group' ||
+                        selection.type === 'mixed';
                         else selectionDrawingTemplate
                       "
                     >
@@ -149,27 +176,30 @@
                           </button>
                         </div>
                         <div class="status-card__grid status-card__grid--token">
-                          <label class="status-card__field">
-                            <span class="status-card__field-label"
-                              >Spielername</span
-                            >
-                            <input
-                              type="text"
-                              [value]="selection.name || ''"
-                              (input)="
-                                state.updateSelectedPlayerName(
-                                  $any($event.target).value
-                                )
-                              "
-                              (keydown.enter)="
-                                state.updateSelectedPlayerName(
-                                  $any($event.target).value
-                                )
-                              "
-                            />
-                          </label>
+                          <ng-container *ngIf="selection.type === 'token'">
+                            <label class="status-card__field">
+                              <span class="status-card__field-label"
+                                >Spielername</span
+                              >
+                              <input
+                                type="text"
+                                [value]="selection.name || ''"
+                                (input)="
+                                  state.updateSelectedPlayerName(
+                                    $any($event.target).value
+                                  )
+                                "
+                                (keydown.enter)="
+                                  state.updateSelectedPlayerName(
+                                    $any($event.target).value
+                                  )
+                                "
+                              />
+                            </label>
+                          </ng-container>
                           <label
                             class="status-card__field status-card__field--slider"
+                            *ngIf="selection.tokenIds?.length"
                           >
                             <span class="status-card__field-label"
                               >Token-Größe</span
@@ -180,7 +210,7 @@
                               [min]="state.tokenScaleMin"
                               [max]="state.tokenScaleMax"
                               step="0.05"
-                              [value]="state.tokenScale()"
+                              [value]="state.tokenScaleValue()"
                               (input)="
                                 state.changeTokenScale(
                                   $any($event.target).value
@@ -191,93 +221,64 @@
                               {{ state.tokenScaleLabel() }}
                             </span>
                           </label>
-                          <!-- <label class="status-card__field">
-                            <span class="status-card__field-label">Pompfe</span>
-                            <div class="status-card__pompfen">
-                              <button
-                                type="button"
-                                class="status-card__pompfen-option"
-                                [class.status-card__pompfen-option--active]="
-                                  !selection.pompfenId
-                                "
-                                (click)="
-                                  state.updateSelectedPlayerPompfen(null)
-                                "
-                              >
-                                Keine
-                              </button>
-                              <button
-                                type="button"
-                                class="status-card__pompfen-option"
-                                *ngFor="let option of state.pompfenOptions"
-                                [class.status-card__pompfen-option--active]="
-                                  selection.pompfenId === option.id
-                                "
-                                (click)="
-                                  state.updateSelectedPlayerPompfen(option.id)
-                                "
-                                [attr.aria-label]="option.title"
-                              >
-                                <img [src]="option.icon" [alt]="option.title" />
-                              </button>
-                            </div>
-                          </label> -->
-                          <label class="status-card__field">
-                            <span class="status-card__field-label">Farbe</span>
-                            <div class="status-card__color">
-                              <input
-                                type="color"
-                                [value]="selection.color || '#4fb28a'"
-                                (input)="
-                                  state.updateSelectedPlayerColor(
-                                    $any($event.target).value
-                                  )
-                                "
-                              />
-                              <button
-                                type="button"
-                                class="field-status__color-button"
-                                (click)="state.toggleColorMenu('selection')"
-                                [style.background-color]="
-                                  selection.color ?? '#f8fafc'
-                                "
-                                aria-label="Farbe ändern"
-                              ></button>
-                              <div
-                                class="field-status__color-menu"
-                                *ngIf="state.isSelectionColorMenuOpen()"
-                              >
-                                <div class="field-status__swatches">
-                                  <button
-                                    type="button"
-                                    *ngFor="let color of selection.palette"
-                                    class="field-status__swatch"
-                                    [class.field-status__swatch--active]="
-                                      selection.color &&
-                                      selection.color.toLowerCase() ===
-                                        color.toLowerCase()
-                                    "
-                                    [style.background-color]="color"
-                                    (click)="state.applySelectedColor(color)"
-                                    [attr.aria-label]="'Farbe ' + color"
-                                  ></button>
+                          <ng-container *ngIf="selection.type === 'token'">
+                            <label class="status-card__field">
+                              <span class="status-card__field-label">Farbe</span>
+                              <div class="status-card__color">
+                                <input
+                                  type="color"
+                                  [value]="selection.color || '#4fb28a'"
+                                  (input)="
+                                    state.updateSelectedPlayerColor(
+                                      $any($event.target).value
+                                    )
+                                  "
+                                />
+                                <button
+                                  type="button"
+                                  class="field-status__color-button"
+                                  (click)="state.toggleColorMenu('selection')"
+                                  [style.background-color]="
+                                    selection.color ?? '#f8fafc'
+                                  "
+                                  aria-label="Farbe ändern"
+                                ></button>
+                                <div
+                                  class="field-status__color-menu"
+                                  *ngIf="state.isSelectionColorMenuOpen()"
+                                >
+                                  <div class="field-status__swatches">
+                                    <button
+                                      type="button"
+                                      *ngFor="let color of selection.palette"
+                                      class="field-status__swatch"
+                                      [class.field-status__swatch--active]="
+                                        selection.color &&
+                                        selection.color.toLowerCase() ===
+                                          color.toLowerCase()
+                                      "
+                                      [style.background-color]="color"
+                                      (click)="state.applySelectedColor(color)"
+                                      [attr.aria-label]="'Farbe ' + color"
+                                    ></button>
+                                  </div>
+                                  <label class="field-status__custom">
+                                    Eigene Farbe
+                                    <input
+                                      type="color"
+                                      [value]="selection.color || '#ffffff'"
+                                      (input)="
+                                        state.applyCustomColor(
+                                          $event,
+                                          'selection'
+                                        )
+                                      "
+                                    />
+                                  </label>
                                 </div>
-                                <label class="field-status__custom">
-                                  Eigene Farbe
-                                  <input
-                                    type="color"
-                                    [value]="selection.color || '#ffffff'"
-                                    (input)="
-                                      state.applyCustomColor(
-                                        $event,
-                                        'selection'
-                                      )
-                                    "
-                                  />
-                                </label>
                               </div>
-                            </div>
-                          </label>
+                            </label>
+                          </ng-container>
                         </div>
                       </div>
                     </ng-container>
@@ -591,126 +592,156 @@
                   <span class="field-status__value">{{ tool.label }}</span>
                 </div>
                 <div class="status-card__body">
-                  <p class="status-card__placeholder">
+                  <section class="status-card__placeholder">
                     Dieses Tool hat keine weiteren Einstellungen.
-                  </p>
+                  </section>
                 </div>
               </div>
             </ng-container>
           </ng-container>
         </ng-container>
-      </section>
+          </section>
+          <section class="workspace-card animation-card">
+            <button
+              type="button"
+              class="workspace-card__expander"
+              (click)="state.toggleAnimationPanel()"
+              [attr.aria-expanded]="state.showAnimationPanel()"
+            >
+              <span class="workspace-card__title">Animation</span>
+              <span
+                class="workspace-card__chevron"
+                [class.workspace-card__chevron--open]="state.showAnimationPanel()"
+                >▾</span
+              >
+            </button>
+            <div
+              class="workspace-card__content animation-card__body"
+              *ngIf="state.showAnimationPanel()"
+            >
+              <div class="scene-strip" role="tablist" aria-label="Szenen">
+                <div class="scene-strip__list">
+                  <div
+                    class="scene-strip__item"
+                    *ngFor="let item of state.scenes(); trackBy: state.trackScene"
+                    [class.scene-strip__item--active]="
+                      item.id === state.activeSceneIdValue()
+                    "
+                  >
+                    <button
+                      type="button"
+                      class="scene-strip__select"
+                      (click)="state.activateScene(item.id)"
+                      role="tab"
+                      [attr.aria-selected]="
+                        item.id === state.activeSceneIdValue()
+                      "
+                    >
+                      <div
+                        class="scene-strip__thumbnail"
+                        [class.scene-strip__thumbnail--empty]="
+                          !item.previewDataUrl
+                        "
+                        [style.background-image]="
+                          item.previewDataUrl
+                            ? 'url(' + item.previewDataUrl + ')'
+                            : ''
+                        "
+                      ></div>
+                      <div class="scene-strip__meta">
+                        <span class="scene-strip__label">{{ item.label }}</span>
+                        <span class="scene-strip__time">{{
+                          item.updatedAt | date : 'HH:mm'
+                        }}</span>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      class="scene-strip__delete"
+                      (click)="
+                        state.deleteScene(item.id); $event.stopPropagation()
+                      "
+                      [disabled]="state.scenes().length <= 1"
+                      aria-label="Szene entfernen"
+                      title="Szene entfernen"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="scene-strip__add"
+                  (click)="state.addScene()"
+                  aria-label="Neue Szene hinzufügen"
+                >
+                  <span aria-hidden="true">+</span>
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
       <p class="workspace__pointer" *ngIf="state.lastPointerEvent() as pointer">
         Letztes Event: {{ pointer }}
       </p>
     </div>
     <aside class="workspace__panel">
       <section class="tool-panels">
-        <input
-          type="radio"
-          id="workspace-tab-tools"
-          class="tool-panels__input"
-          name="workspace-tool-panels"
-          checked
-        />
-        <input
-          type="radio"
-          id="workspace-tab-advanced"
-          class="tool-panels__input"
-          name="workspace-tool-panels"
-        />
-        <input
-          type="radio"
-          id="workspace-tab-players"
-          class="tool-panels__input"
-          name="workspace-tool-panels"
-        />
-        <input
-          type="radio"
-          id="workspace-tab-export"
-          class="tool-panels__input"
-          name="workspace-tool-panels"
-        />
-
-        <div class="tool-panels__tablist">
-          <label
+        <div class="tool-panels__tablist" role="tablist" aria-label="Arbeitsbereich">
+          <button
+            type="button"
             class="tool-panels__tab"
-            for="workspace-tab-tools"
-            id="workspace-tab-tools-label"
+            [class.tool-panels__tab--active]="state.workspaceTab() === 'advanced'"
+            (click)="state.selectWorkspaceTab('advanced')"
+            role="tab"
+            id="workspace-tab-advanced"
+            aria-controls="workspace-panel-advanced"
+            [attr.aria-selected]="state.workspaceTab() === 'advanced'"
           >
-            Werkzeuge
-          </label>
-          <label
+            Einstellungen
+          </button>
+          <button
+            type="button"
             class="tool-panels__tab"
-            for="workspace-tab-advanced"
-            id="workspace-tab-advanced-label"
-          >
-            Erweiterte Feldeinstellungen
-          </label>
-          <label
-            class="tool-panels__tab"
-            for="workspace-tab-players"
-            id="workspace-tab-players-label"
+            [class.tool-panels__tab--active]="state.workspaceTab() === 'players'"
+            (click)="state.selectWorkspaceTab('players')"
+            role="tab"
+            id="workspace-tab-players"
+            aria-controls="workspace-panel-players"
+            [attr.aria-selected]="state.workspaceTab() === 'players'"
           >
             Spieler
-          </label>
-          <label
+          </button>
+          <button
+            type="button"
             class="tool-panels__tab"
-            for="workspace-tab-export"
-            id="workspace-tab-export-label"
+            [class.tool-panels__tab--active]="state.workspaceTab() === 'export'"
+            (click)="state.selectWorkspaceTab('export')"
+            role="tab"
+            id="workspace-tab-export"
+            aria-controls="workspace-panel-export"
+            [attr.aria-selected]="state.workspaceTab() === 'export'"
           >
             Teilen
-          </label>
+          </button>
         </div>
-
-        <div class="tool-panels__body">
-          <section
-            id="workspace-panel-tools"
-            class="tool-panels__panel tool-panels__panel--tools workspace-card tool-suite"
-            aria-labelledby="workspace-tab-tools-label"
-          >
-            <header class="tool-suite__header">
-              <div class="tool-suite__titles">
-                <h3 class="tool-panels__title">Werkzeuge</h3>
-              </div>
-            </header>
-            <div class="tool-suite__body">
-              <div class="tool-suite__grid">
-                <div
-                  class="tool-buttons__item"
-                  *ngFor="let tool of state.toolShortcuts"
-                >
-                  <span
-                    class="tool-buttons__shortcut"
-                    [class.tool-buttons__shortcut--active]="
-                      tool.id === state.selectedTool()
-                    "
-                  >
-                    {{ tool.shortcut }}
-                  </span>
-                  <button
-                    type="button"
-                    class="tool-button"
-                    [class.tool-button--active]="
-                      tool.id === state.selectedTool()
-                    "
-                    (click)="state.selectTool(tool.id)"
-                  >
-                    <span class="tool-button__label">{{ tool.label }}</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
-
+        <div class="tool-panels__body" [attr.data-active-tab]="state.workspaceTab()">
           <section
             id="workspace-panel-advanced"
             class="tool-panels__panel tool-panels__panel--advanced workspace-card advanced-suite"
-            aria-labelledby="workspace-tab-advanced-label"
+            [class.tool-panels__panel--active]="state.workspaceTab() === 'advanced'"
+            role="tabpanel"
+            aria-labelledby="workspace-panel-advanced-heading"
           >
             <header class="advanced-suite__header">
               <div class="advanced-suite__titles">
-                <h3 class="tool-panels__title">Erweiterte Feldeinstellungen</h3>
+                <h3
+                  class="tool-panels__title"
+                  id="workspace-panel-advanced-heading"
+                >
+                  Erweiterte Feldeinstellungen
+                </h3>
               </div>
             </header>
             <div class="advanced-suite__body">
@@ -855,7 +886,9 @@
           <section
             id="workspace-panel-players"
             class="tool-panels__panel tool-panels__panel--players workspace-card"
-            aria-labelledby="workspace-tab-players-label"
+            [class.tool-panels__panel--active]="state.workspaceTab() === 'players'"
+            role="tabpanel"
+            aria-labelledby="workspace-panel-players-heading"
           >
             <button
               type="button"
@@ -864,7 +897,19 @@
             >
               Demo Spieler hinzufügen
             </button>
-            <h3 class="tool-panels__title">Spieler hinzufügen</h3>
+            <button
+              type="button"
+              class="quick-add__demo-button quick-add__demo-button--secondary"
+              (click)="state.resetDemoPlayersToStartPositions()"
+            >
+              Startpositionen wiederherstellen
+            </button>
+            <h3
+              class="tool-panels__title"
+              id="workspace-panel-players-heading"
+            >
+              Spieler hinzufügen
+            </h3>
             <div class="quick-add__form">
               <label class="quick-add__field">
                 <span>Name</span>
@@ -897,11 +942,18 @@
           <section
             id="workspace-panel-export"
             class="tool-panels__panel tool-panels__panel--export workspace-card export-suite"
-            aria-labelledby="workspace-tab-export-label"
+            [class.tool-panels__panel--active]="state.workspaceTab() === 'export'"
+            role="tabpanel"
+            aria-labelledby="workspace-panel-export-heading"
           >
             <header class="export-suite__header">
               <div class="export-suite__titles">
-                <h3 class="tool-panels__title">Teilen</h3>
+                <h3
+                  class="tool-panels__title"
+                  id="workspace-panel-export-heading"
+                >
+                  Teilen
+                </h3>
               </div>
               <span
                 class="export-suite__badge"
@@ -1031,75 +1083,4 @@
       </section>
     </aside>
   </div>
-  <section class="workspace-card animation-card">
-    <button
-      type="button"
-      class="workspace-card__expander"
-      (click)="state.toggleAnimationPanel()"
-      [attr.aria-expanded]="state.showAnimationPanel()"
-    >
-      <span class="workspace-card__title">Animation</span>
-      <span
-        class="workspace-card__chevron"
-        [class.workspace-card__chevron--open]="state.showAnimationPanel()"
-        >▾</span
-      >
-    </button>
-    <div
-      class="workspace-card__content animation-card__body"
-      *ngIf="state.showAnimationPanel()"
-    >
-      <div class="scene-strip" role="tablist" aria-label="Szenen">
-        <div class="scene-strip__list">
-          <div
-            class="scene-strip__item"
-            *ngFor="let item of state.scenes(); trackBy: state.trackScene"
-            [class.scene-strip__item--active]="
-              item.id === state.activeSceneIdValue()
-            "
-          >
-            <button
-              type="button"
-              class="scene-strip__select"
-              (click)="state.activateScene(item.id)"
-              role="tab"
-              [attr.aria-selected]="item.id === state.activeSceneIdValue()"
-            >
-              <div
-                class="scene-strip__thumbnail"
-                [class.scene-strip__thumbnail--empty]="!item.previewDataUrl"
-                [style.background-image]="
-                  item.previewDataUrl ? 'url(' + item.previewDataUrl + ')' : ''
-                "
-              ></div>
-              <div class="scene-strip__meta">
-                <span class="scene-strip__label">{{ item.label }}</span>
-                <span class="scene-strip__time">{{
-                  item.updatedAt | date : 'HH:mm'
-                }}</span>
-              </div>
-            </button>
-            <button
-              type="button"
-              class="scene-strip__delete"
-              (click)="state.deleteScene(item.id); $event.stopPropagation()"
-              [disabled]="state.scenes().length <= 1"
-              aria-label="Szene entfernen"
-              title="Szene entfernen"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-        <button
-          type="button"
-          class="scene-strip__add"
-          (click)="state.addScene()"
-          aria-label="Neue Szene hinzufügen"
-        >
-          <span aria-hidden="true">+</span>
-        </button>
-      </div>
-    </div>
-  </section>
 </section>

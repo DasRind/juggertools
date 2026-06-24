@@ -35,9 +35,34 @@ export type SelectTarget =
       action?: 'delete';
     };
 
+export interface SelectionModifiers {
+  additive?: boolean;
+  toggle?: boolean;
+  subtractive?: boolean;
+}
+
+export interface SelectionRect {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
 export type SelectToolEventData =
   | { kind: 'hover'; target?: SelectTarget }
-  | { kind: 'select'; target?: SelectTarget }
+  | { kind: 'select'; target?: SelectTarget; modifiers?: SelectionModifiers }
+  | {
+      kind: 'select-group';
+      targets: SelectTarget[];
+      modifiers?: SelectionModifiers;
+    }
+  | {
+      kind: 'marquee';
+      phase: 'start' | 'update' | 'end';
+      rect: SelectionRect;
+      targets: SelectTarget[];
+      modifiers?: SelectionModifiers;
+    }
   | { kind: 'drag'; target: SelectTarget }
   | { kind: 'release'; target?: SelectTarget };
 
@@ -257,6 +282,18 @@ type DragState =
   | {
       mode: 'cone-radius';
       drawingId: string;
+    }
+  | {
+      mode: 'marquee';
+      origin: { x: number; y: number };
+      modifiers: SelectionModifiers;
+      baseSelection: SelectTarget[];
+    }
+  | {
+      mode: 'token-group';
+      tokenIds: string[];
+      startPointer: { x: number; y: number };
+      startPositions: Map<string, { x: number; y: number }>;
     };
 
 class SelectTool implements DrawTool {
@@ -268,6 +305,8 @@ class SelectTool implements DrawTool {
   private selected?: SelectTarget;
   private dragState?: DragState;
   private tokenRadius = TOKEN_HIT_RADIUS;
+  private selection: SelectTarget[] = [];
+  private marqueeRect?: SelectionRect;
 
   configure(config: unknown): void {
     if (!config || typeof config !== 'object') {
@@ -329,6 +368,7 @@ class SelectTool implements DrawTool {
     scene: SceneSnapshot,
     runtime: DrawToolRuntime
   ): void {
+    const modifiers = this.extractModifiers(context.originalEvent);
     const target = this.pickTarget(
       scene,
       context.fieldPoint.x,
@@ -339,30 +379,92 @@ class SelectTool implements DrawTool {
       this.deleteDrawing(target.id, runtime);
       this.selected = undefined;
       this.dragState = undefined;
+      this.selection = [];
       runtime.emit({ context, data: { kind: 'select', target: undefined } });
+      runtime.emit({
+        context,
+        data: { kind: 'select-group', targets: [], modifiers },
+      });
       return;
     }
 
     this.dragState = undefined;
 
     if (!target) {
-      if (this.selected) {
+      const origin = {
+        x: context.fieldPoint.x,
+        y: context.fieldPoint.y,
+      };
+      const baseSelection =
+        modifiers.additive || modifiers.toggle
+          ? [...this.selection]
+          : [];
+      if (!modifiers.additive && !modifiers.toggle) {
+        this.selection = [];
         this.selected = undefined;
         runtime.emit({ context, data: { kind: 'select', target: undefined } });
+        runtime.emit({
+          context,
+          data: { kind: 'select-group', targets: [], modifiers },
+        });
       }
+      this.marqueeRect = this.normalizeRect(origin, origin);
+      this.dragState = {
+        mode: 'marquee',
+        origin,
+        modifiers,
+        baseSelection,
+      };
+      runtime.emit({
+        context,
+        data: {
+          kind: 'marquee',
+          phase: 'start',
+          rect: this.marqueeRect,
+          targets: baseSelection,
+          modifiers,
+        },
+      });
       return;
     }
 
     if (target.type === 'token') {
-      const token = this.findTokenById(scene.scene.tokens, target.id);
-      const offset = token
-        ? {
-            dx: context.fieldPoint.x - token.x,
-            dy: context.fieldPoint.y - token.y,
+      const selection = this.applySelectionForTarget(target, modifiers);
+      const tokenSelection = selection.filter(
+        (entry): entry is SelectTarget & { type: 'token' } => entry.type === 'token'
+      );
+      if (tokenSelection.length > 1) {
+        const startPointer = {
+          x: context.fieldPoint.x,
+          y: context.fieldPoint.y,
+        };
+        const startPositions = new Map<string, { x: number; y: number }>();
+        tokenSelection.forEach((entry) => {
+          const token = this.findTokenById(scene.scene.tokens, entry.id);
+          if (token) {
+            startPositions.set(entry.id, { x: token.x, y: token.y });
           }
-        : { dx: 0, dy: 0 };
-      this.dragState = { mode: 'token', tokenId: target.id, offset };
-      this.selected = target;
+        });
+        this.dragState = {
+          mode: 'token-group',
+          tokenIds: tokenSelection.map((entry) => entry.id),
+          startPointer,
+          startPositions,
+        };
+      } else {
+        const token = this.findTokenById(scene.scene.tokens, target.id);
+        const offset = token
+          ? {
+              dx: context.fieldPoint.x - token.x,
+              dy: context.fieldPoint.y - token.y,
+            }
+          : { dx: 0, dy: 0 };
+        this.dragState = { mode: 'token', tokenId: target.id, offset };
+      }
+      runtime.emit({
+        context,
+        data: { kind: 'select-group', targets: selection, modifiers },
+      });
       runtime.emit({ context, data: { kind: 'select', target } });
       return;
     }
@@ -380,7 +482,11 @@ class SelectTool implements DrawTool {
           drawingId: target.id,
           handle: target.handle,
         };
-        this.selected = baseSelection;
+        const selection = this.applySelectionForTarget(baseSelection, modifiers);
+        runtime.emit({
+          context,
+          data: { kind: 'select-group', targets: selection, modifiers },
+        });
         runtime.emit({
           context,
           data: { kind: 'select', target: baseSelection },
@@ -397,7 +503,11 @@ class SelectTool implements DrawTool {
           drawingId: target.id,
           handle: target.handle,
         };
-        this.selected = baseSelection;
+        const selection = this.applySelectionForTarget(baseSelection, modifiers);
+        runtime.emit({
+          context,
+          data: { kind: 'select-group', targets: selection, modifiers },
+        });
         runtime.emit({
           context,
           data: { kind: 'select', target: baseSelection },
@@ -410,7 +520,11 @@ class SelectTool implements DrawTool {
           mode: 'cone-radius',
           drawingId: target.id,
         };
-        this.selected = baseSelection;
+        const selection = this.applySelectionForTarget(baseSelection, modifiers);
+        runtime.emit({
+          context,
+          data: { kind: 'select-group', targets: selection, modifiers },
+        });
         runtime.emit({
           context,
           data: { kind: 'select', target: baseSelection },
@@ -456,7 +570,11 @@ class SelectTool implements DrawTool {
         };
       }
 
-      this.selected = baseSelection;
+      const selection = this.applySelectionForTarget(baseSelection, modifiers);
+      runtime.emit({
+        context,
+        data: { kind: 'select-group', targets: selection, modifiers },
+      });
       runtime.emit({
         context,
         data: { kind: 'select', target: baseSelection },
@@ -469,6 +587,60 @@ class SelectTool implements DrawTool {
       return;
     }
     const state = this.dragState;
+
+    if (state.mode === 'token-group') {
+      const dx = context.fieldPoint.x - state.startPointer.x;
+      const dy = context.fieldPoint.y - state.startPointer.y;
+      runtime.updateScene((snapshot) => ({
+        ...snapshot,
+        scene: {
+          ...snapshot.scene,
+          tokens: snapshot.scene.tokens.map((token) => {
+            const origin = state.startPositions.get(token.id);
+            if (!origin) {
+              return token;
+            }
+            return {
+              ...token,
+              x: origin.x + dx,
+              y: origin.y + dy,
+            };
+          }),
+        },
+      }));
+      const groupTarget: SelectTarget = {
+        type: 'token',
+        id: state.tokenIds[state.tokenIds.length - 1],
+      };
+      runtime.emit({ context, data: { kind: 'drag', target: groupTarget } });
+      return;
+    }
+
+    if (state.mode === 'marquee') {
+      const current = {
+        x: context.fieldPoint.x,
+        y: context.fieldPoint.y,
+      };
+      const rect = this.normalizeRect(state.origin, current);
+      this.marqueeRect = rect;
+      const targets = this.findTargetsInRect(runtime.scene.scene, rect);
+      const preview = this.applySelectionModifiers(
+        state.baseSelection,
+        targets,
+        state.modifiers
+      );
+      runtime.emit({
+        context,
+        data: {
+          kind: 'marquee',
+          phase: 'update',
+          rect,
+          targets: preview,
+          modifiers: state.modifiers,
+        },
+      });
+      return;
+    }
 
     if (state.mode === 'token') {
       const target: SelectTarget = { type: 'token', id: state.tokenId };
@@ -701,6 +873,65 @@ class SelectTool implements DrawTool {
     const state = this.dragState;
     this.dragState = undefined;
 
+    if (state.mode === 'marquee') {
+      const scene = runtime.scene;
+      const currentPoint = {
+        x: context.fieldPoint.x,
+        y: context.fieldPoint.y,
+      };
+      const rect = this.normalizeRect(state.origin, currentPoint);
+      this.marqueeRect = undefined;
+      const targets = scene
+        ? this.findTargetsInRect(scene.scene, rect)
+        : state.baseSelection;
+      const finalSelection = this.applySelectionModifiers(
+        state.baseSelection,
+        targets,
+        state.modifiers
+      );
+      this.selection = finalSelection;
+      this.selected = finalSelection.length
+        ? finalSelection[finalSelection.length - 1]
+        : undefined;
+      runtime.emit({
+        context,
+        data: {
+          kind: 'marquee',
+          phase: 'end',
+          rect,
+          targets: finalSelection,
+          modifiers: state.modifiers,
+        },
+      });
+      runtime.emit({
+        context,
+        data: {
+          kind: 'select-group',
+          targets: finalSelection,
+          modifiers: state.modifiers,
+        },
+      });
+      runtime.emit({
+        context,
+        data: { kind: 'select', target: this.selected },
+      });
+      return;
+    }
+
+    if (state.mode === 'token-group') {
+      runtime.emit({
+        context,
+        data: {
+          kind: 'release',
+          target: {
+            type: 'token',
+            id: state.tokenIds[state.tokenIds.length - 1],
+          },
+        },
+      });
+      return;
+    }
+
     if (state.mode === 'token') {
       runtime.emit({
         context,
@@ -715,6 +946,155 @@ class SelectTool implements DrawTool {
         target: { type: 'drawing', id: state.drawingId },
       },
     });
+  }
+
+  private extractModifiers(event: PointerEvent): SelectionModifiers {
+    const toggle = event.ctrlKey || event.metaKey;
+    const additive = event.shiftKey && !toggle;
+    const subtractive = event.altKey;
+    return { toggle, additive, subtractive };
+  }
+
+  private applySelectionForTarget(
+    target: SelectTarget,
+    modifiers: SelectionModifiers
+  ): SelectTarget[] {
+    const next = this.applySelectionModifiers(this.selection, [target], modifiers);
+    this.selection = next;
+    this.selected = next.length ? next[next.length - 1] : undefined;
+    return next;
+  }
+
+  private applySelectionModifiers(
+    base: SelectTarget[],
+    incoming: SelectTarget[],
+    modifiers: SelectionModifiers
+  ): SelectTarget[] {
+    let result = base.slice();
+    if (modifiers.subtractive) {
+      result = result.filter(
+        (entry) => !incoming.some((target) => this.isSameTarget(entry, target))
+      );
+      return result;
+    }
+    if (modifiers.toggle) {
+      incoming.forEach((target) => {
+        const index = result.findIndex((entry) => this.isSameTarget(entry, target));
+        if (index >= 0) {
+          result.splice(index, 1);
+        } else {
+          result.push(target);
+        }
+      });
+      return result;
+    }
+    if (modifiers.additive) {
+      incoming.forEach((target) => {
+        if (!result.some((entry) => this.isSameTarget(entry, target))) {
+          result.push(target);
+        }
+      });
+      return result;
+    }
+    const alreadySelected = incoming.every((target) =>
+      result.some((entry) => this.isSameTarget(entry, target))
+    );
+    if (alreadySelected && result.length > 0) {
+      return result;
+    }
+    return incoming.slice();
+  }
+
+  private normalizeRect(
+    a: { x: number; y: number },
+    b: { x: number; y: number }
+  ): SelectionRect {
+    return {
+      x1: Math.min(a.x, b.x),
+      y1: Math.min(a.y, b.y),
+      x2: Math.max(a.x, b.x),
+      y2: Math.max(a.y, b.y),
+    };
+  }
+
+  private findTargetsInRect(
+    scene: SceneSnapshot['scene'],
+    rect: SelectionRect
+  ): SelectTarget[] {
+    const targets: SelectTarget[] = [];
+    scene.tokens.forEach((token) => {
+      if (this.pointInRect(token.x, token.y, rect)) {
+        targets.push({ type: 'token', id: token.id });
+      }
+    });
+    scene.drawings.forEach((drawing) => {
+      if (this.drawingIntersectsRect(drawing, rect)) {
+        targets.push({ type: 'drawing', id: drawing.id });
+      }
+    });
+    return targets;
+  }
+
+  private pointInRect(x: number, y: number, rect: SelectionRect): boolean {
+    return x >= rect.x1 && x <= rect.x2 && y >= rect.y1 && y <= rect.y2;
+  }
+
+  private rectsOverlap(a: SelectionRect, b: SelectionRect): boolean {
+    return a.x1 <= b.x2 && a.x2 >= b.x1 && a.y1 <= b.y2 && a.y2 >= b.y1;
+  }
+
+  private drawingIntersectsRect(drawing: Drawing, rect: SelectionRect): boolean {
+    if (drawing.kind === 'pen' || drawing.kind === 'line') {
+      if (drawing.points.length === 0) {
+        return false;
+      }
+      const bounds = drawing.points.reduce(
+        (acc, point) => ({
+          x1: Math.min(acc.x1, point.x),
+          y1: Math.min(acc.y1, point.y),
+          x2: Math.max(acc.x2, point.x),
+          y2: Math.max(acc.y2, point.y),
+        }),
+        {
+          x1: Number.POSITIVE_INFINITY,
+          y1: Number.POSITIVE_INFINITY,
+          x2: Number.NEGATIVE_INFINITY,
+          y2: Number.NEGATIVE_INFINITY,
+        }
+      );
+      if (bounds.x1 === Number.POSITIVE_INFINITY) {
+        return false;
+      }
+      return this.rectsOverlap(rect, bounds as SelectionRect);
+    }
+    if (drawing.kind === 'arrow') {
+      const bounds: SelectionRect = {
+        x1: Math.min(drawing.from.x, drawing.to.x),
+        y1: Math.min(drawing.from.y, drawing.to.y),
+        x2: Math.max(drawing.from.x, drawing.to.x),
+        y2: Math.max(drawing.from.y, drawing.to.y),
+      };
+      return this.rectsOverlap(rect, bounds);
+    }
+    if (drawing.kind === 'cone') {
+      const bounds: SelectionRect = {
+        x1: drawing.at.x - drawing.radius,
+        y1: drawing.at.y - drawing.radius,
+        x2: drawing.at.x + drawing.radius,
+        y2: drawing.at.y + drawing.radius,
+      };
+      return this.rectsOverlap(rect, bounds);
+    }
+    if (drawing.kind === 'image') {
+      const bounds: SelectionRect = {
+        x1: drawing.x,
+        y1: drawing.y,
+        x2: drawing.x + drawing.width,
+        y2: drawing.y + drawing.height,
+      };
+      return this.rectsOverlap(rect, bounds);
+    }
+    return false;
   }
 
   private findHoverTarget(
@@ -2024,7 +2404,7 @@ class EraserTool implements DrawTool {
     }
     const maybe = config as { radius?: unknown };
     if (typeof maybe.radius === 'number' && Number.isFinite(maybe.radius)) {
-      this.radius = Math.max(1, Math.min(maybe.radius, 12));
+      this.radius = Math.max(1, maybe.radius);
     }
   }
 
@@ -2079,6 +2459,25 @@ class EraserTool implements DrawTool {
   ): Drawing[] {
     if (drawing.kind === 'pen') {
       return this.trimPenDrawing(drawing, point);
+    }
+    if (drawing.kind === 'line') {
+      return this.trimLineDrawing(drawing, point);
+    }
+    if (drawing.kind === 'arrow') {
+      return this.trimArrowDrawing(drawing, point);
+    }
+    if (drawing.kind === 'cone') {
+      const threshold = this.radius + drawing.radius;
+      const dist = distance(drawing.at, point);
+      return dist <= threshold ? [] : [drawing];
+    }
+    if (drawing.kind === 'image') {
+      const within =
+        point.x >= drawing.x &&
+        point.x <= drawing.x + drawing.width &&
+        point.y >= drawing.y &&
+        point.y <= drawing.y + drawing.height;
+      return within ? [] : [drawing];
     }
     return [drawing];
   }

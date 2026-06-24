@@ -161,13 +161,13 @@ const DEMO_FORMATION = [
   {
     name: 'Lang',
     color: DEMO_LEFT_COLOR,
-    xFactor: 0.4102,
+    xFactor: 0.41,
     yFactor: 0.1626,
   },
   {
     name: 'Stab',
     color: DEMO_LEFT_COLOR,
-    xFactor: 0.4078,
+    xFactor: 0.41,
     yFactor: 0.372,
   },
   {
@@ -179,25 +179,25 @@ const DEMO_FORMATION = [
   {
     name: 'Kette',
     color: DEMO_LEFT_COLOR,
-    xFactor: 0.4067,
+    xFactor: 0.41,
     yFactor: 0.6017,
   },
   {
     name: 'Schild',
     color: DEMO_LEFT_COLOR,
-    xFactor: 0.4019,
+    xFactor: 0.41,
     yFactor: 0.8015,
   },
   {
     name: 'Q',
     color: DEMO_RIGHT_COLOR,
-    xFactor: 0.5981,
+    xFactor: 0.59,
     yFactor: 0.1554,
   },
   {
     name: 'Kette',
     color: DEMO_RIGHT_COLOR,
-    xFactor: 0.5981,
+    xFactor: 0.59,
     yFactor: 0.3767,
   },
   {
@@ -209,17 +209,22 @@ const DEMO_FORMATION = [
   {
     name: 'Schild',
     color: DEMO_RIGHT_COLOR,
-    xFactor: 0.5898,
+    xFactor: 0.59,
     yFactor: 0.6017,
   },
   {
     name: 'Lang',
     color: DEMO_RIGHT_COLOR,
-    xFactor: 0.5957,
+    xFactor: 0.59,
     yFactor: 0.8111,
   },
 ] as const;
 const TOKEN_COLOR_OPTIONS = [
+  '#dc2626',
+  '#fb7185',
+  '#2563eb',
+  '#60a5fa',
+  '#4fb28a',
   '#f97316',
   '#facc15',
   '#34d399',
@@ -292,9 +297,9 @@ const STORAGE_KEY = 'juggertools:tactics:session';
 const VISUAL_SCALE = 5.4;
 const TOKEN_BASE_RADIUS = 3.4 * VISUAL_SCALE;
 const DEFAULT_TOKEN_SCALE = 1.6;
-const TOKEN_SCALE_MIN = 0.6;
-const TOKEN_SCALE_MAX = 1.8;
-const SELECTION_OUTLINE_EXTRA = 1.0 * VISUAL_SCALE;
+const TOKEN_SCALE_MIN = 1.2;
+const TOKEN_SCALE_MAX = 2.0;
+const SELECTION_OUTLINE_EXTRA = 1.0;
 const SELECTED_OUTLINE_COLOR = 'rgba(248, 208, 208, 1)';
 const HOVER_OUTLINE_COLOR = 'rgba(215, 186, 186, 0.8)';
 const JUGG_ID = 'jugg-token';
@@ -311,8 +316,8 @@ const STROKE_FACTOR_MAX = 1.8;
 const FIELD_ZOOM_MIN = 0.5;
 const FIELD_ZOOM_MAX = 2.5;
 const ERASER_RADIUS_MIN = 2.6 * VISUAL_SCALE;
-const ERASER_RADIUS_MAX = 5.4 * VISUAL_SCALE;
-const DEFAULT_ERASER_RADIUS = 3.6 * VISUAL_SCALE;
+const ERASER_RADIUS_MAX = 12 * VISUAL_SCALE;
+const DEFAULT_ERASER_RADIUS = 4.2 * VISUAL_SCALE;
 const JUGG_CORNER_RATIO = 0.28;
 const FIELD_SURFACE_COLOR = '#2ac88b';
 const DEFAULT_FIELD_LINE_COLOR = '#f8fafc';
@@ -321,14 +326,17 @@ const DEFAULT_FIELD_LINE_ALPHA = 0.55;
 const EXPORT_PADDING = 0;
 const EXPORT_DEVICE_PIXEL_RATIO = 1;
 const SCENE_PREVIEW_WIDTH = 220;
-const DEFAULT_TEAM_COLORS: Record<TeamSide, { primary: string; secondary: string }> = {
-  left: { primary: "#dc2626", secondary: "#fb7185" },
-  right: { primary: "#2563eb", secondary: "#60a5fa" },
+const DEFAULT_TEAM_COLORS: Record<
+  TeamSide,
+  { primary: string; secondary: string }
+> = {
+  left: { primary: '#dc2626', secondary: '#fb7185' },
+  right: { primary: '#2563eb', secondary: '#60a5fa' },
 };
 
 const DEFAULT_TEAM_NAMES: Record<TeamSide, string> = {
-  left: "Linkes Team",
-  right: "Rechtes Team",
+  left: 'Linkes Team',
+  right: 'Rechtes Team',
 };
 
 const DEMO_TEAM_PLAYERS: Record<
@@ -352,13 +360,48 @@ const DEMO_TEAM_PLAYERS: Record<
 };
 
 const POMPFEN_DEFINITIONS: readonly PompfenDefinition[] = [
-  { id: "chain", label: "Kette", title: "Kettenlaeufer", icon: "assets/pompfen/pompfen-chain.svg" },
-  { id: "staff", label: "Stab", title: "Stabspieler", icon: "assets/pompfen/pompfen-staff.svg" },
-  { id: "sword", label: "Schwert", title: "Schwert", icon: "assets/pompfen/pompfen-sword.svg" },
-  { id: "shield", label: "Schild", title: "Schild", icon: "assets/pompfen/pompfen-shield.svg" },
-  { id: "q-tip", label: "Q-Tip", title: "Q-Tip", icon: "assets/pompfen/pompfen-qtip.svg" },
-  { id: "dual", label: "Dual", title: "Dual", icon: "assets/pompfen/pompfen-dual.svg" },
-  { id: "reserve", label: "Reserve", title: "Reserve", icon: "assets/pompfen/pompfen-reserve.svg" },
+  {
+    id: 'chain',
+    label: 'Kette',
+    title: 'Kettenlaeufer',
+    icon: 'assets/pompfen/pompfen-chain.svg',
+  },
+  {
+    id: 'staff',
+    label: 'Stab',
+    title: 'Stabspieler',
+    icon: 'assets/pompfen/pompfen-staff.svg',
+  },
+  {
+    id: 'sword',
+    label: 'Schwert',
+    title: 'Schwert',
+    icon: 'assets/pompfen/pompfen-sword.svg',
+  },
+  {
+    id: 'shield',
+    label: 'Schild',
+    title: 'Schild',
+    icon: 'assets/pompfen/pompfen-shield.svg',
+  },
+  {
+    id: 'q-tip',
+    label: 'Q-Tip',
+    title: 'Q-Tip',
+    icon: 'assets/pompfen/pompfen-qtip.svg',
+  },
+  {
+    id: 'dual',
+    label: 'Dual',
+    title: 'Dual',
+    icon: 'assets/pompfen/pompfen-dual.svg',
+  },
+  {
+    id: 'reserve',
+    label: 'Reserve',
+    title: 'Reserve',
+    icon: 'assets/pompfen/pompfen-reserve.svg',
+  },
 ];
 
 const SCENE_PREVIEW_HEIGHT = 124;
@@ -390,20 +433,60 @@ function cloneFieldLayout(
   };
 }
 
-interface SelectedStatus {
-  type: 'token' | 'drawing';
+interface SelectionItem {
+  id: string;
+  kind: 'token' | 'drawing';
   label: string;
   color: string | null;
-  supportsColor: boolean;
-  palette: readonly string[];
-  drawingKind?: Drawing['kind'];
-  playerId?: string | null;
-  tokenId?: string;
-  teamSide?: TeamSide | null;
-  pompfenId?: PompfenId | null;
-  isQuick?: boolean;
-  name?: string | null;
+  tokenScale?: number | null;
 }
+
+type SelectedStatus =
+  | {
+      type: 'token';
+      label: string;
+      color: string | null;
+      supportsColor: boolean;
+      palette: readonly string[];
+      playerId?: string | null;
+      tokenId?: string;
+      teamSide?: TeamSide | null;
+      pompfenId?: PompfenId | null;
+      isQuick?: boolean;
+      name?: string | null;
+      tokenIds: string[];
+      items: SelectionItem[];
+    }
+  | {
+      type: 'token-group';
+      label: string;
+      count: number;
+      tokenIds: string[];
+      uniformScale: number | null;
+      color: null;
+      supportsColor: false;
+      palette: readonly string[];
+      items: SelectionItem[];
+    }
+  | {
+      type: 'drawing';
+      label: string;
+      color: string | null;
+      supportsColor: boolean;
+      palette: readonly string[];
+      drawingKind?: Drawing['kind'];
+      tokenIds: string[];
+      items: SelectionItem[];
+    }
+  | {
+      type: 'mixed';
+      label: string;
+      color: null;
+      supportsColor: false;
+      palette: readonly string[];
+      tokenIds: string[];
+      items: SelectionItem[];
+    };
 
 interface ToolStatus {
   kind: 'select' | 'pen' | 'eraser' | 'line' | 'arrow' | 'cone';
@@ -433,10 +516,16 @@ export class TacticsStateService {
     this.createInitialTeamConfig('right')
   );
 
-  readonly leftTeam = computed<Team>(() => this.toDomainTeam(this.leftTeamState()));
-  readonly rightTeam = computed<Team>(() => this.toDomainTeam(this.rightTeamState()));
+  readonly leftTeam = computed<Team>(() =>
+    this.toDomainTeam(this.leftTeamState())
+  );
+  readonly rightTeam = computed<Team>(() =>
+    this.toDomainTeam(this.rightTeamState())
+  );
 
-  private readonly storedTeams = signal<StoredTeamEntry[]>(this.loadStoredTeams());
+  private readonly storedTeams = signal<StoredTeamEntry[]>(
+    this.loadStoredTeams()
+  );
   readonly availableStoredTeams = computed(() => this.storedTeams());
 
   private readonly teamCollapseState = signal<Record<TeamSide, boolean>>({
@@ -452,6 +541,12 @@ export class TacticsStateService {
   readonly teamNameDraft = computed(() => this.teamNameDrafts());
 
   private readonly quickPlayersState = signal<Record<string, QuickPlayer>>({});
+  readonly workspaceTab = signal<'advanced' | 'players' | 'export'>('advanced');
+  readonly selectWorkspaceTab = (
+    tab: 'advanced' | 'players' | 'export'
+  ): void => {
+    this.workspaceTab.set(tab);
+  };
   readonly quickAddDraft = signal<QuickPlayerDraft>({
     name: '',
     color: QUICK_DEFAULT_COLOR,
@@ -468,18 +563,27 @@ export class TacticsStateService {
   readonly leftTeamConfig = computed(() => this.leftTeamState());
   readonly rightTeamConfig = computed(() => this.rightTeamState());
 
-  private readonly activeTeamDialog = signal<{ side: TeamSide; mode: 'load' } | null>(null);
+  private readonly activeTeamDialog = signal<{
+    side: TeamSide;
+    mode: 'load';
+  } | null>(null);
   readonly teamDialog = computed(() => this.activeTeamDialog());
 
   private readonly editingTeamNameState = signal<TeamSide | null>(null);
   readonly editingTeamName = computed(() => this.editingTeamNameState());
 
-  private readonly editingPlayerState = signal<{ side: TeamSide; playerId: string } | null>(null);
+  private readonly editingPlayerState = signal<{
+    side: TeamSide;
+    playerId: string;
+  } | null>(null);
   readonly editingPlayer = computed(() => this.editingPlayerState());
 
   private pendingTeamNameFocus: TeamSide | null = null;
 
-  private readonly pompfenPickerState = signal<{ side: TeamSide; playerId?: string } | null>(null);
+  private readonly pompfenPickerState = signal<{
+    side: TeamSide;
+    playerId?: string;
+  } | null>(null);
   readonly pompfenPicker = computed(() => this.pompfenPickerState());
 
   private readonly sceneSnapshot = signal(
@@ -547,6 +651,10 @@ export class TacticsStateService {
     if (typeof document !== 'undefined') {
       document.documentElement.classList.toggle('theme-dark', dark);
       document.documentElement.classList.toggle('theme-light', !dark);
+      document.documentElement.setAttribute(
+        'data-theme',
+        dark ? 'dark' : 'light'
+      );
     }
     if (typeof localStorage !== 'undefined') {
       try {
@@ -683,14 +791,11 @@ export class TacticsStateService {
   readonly eraserRadiusMin = ERASER_RADIUS_MIN;
   readonly eraserRadiusMax = ERASER_RADIUS_MAX;
 
-  readonly tokenScaleLabel = computed(() =>
-    `${Math.round(this.tokenScale() * 100)}%`
+  readonly strokeWidthFactorLabel = computed(
+    () => `${Math.round(this.strokeWidthFactor() * 100)}%`
   );
-  readonly strokeWidthFactorLabel = computed(() =>
-    `${Math.round(this.strokeWidthFactor() * 100)}%`
-  );
-  readonly eraserRadiusLabel = computed(() =>
-    `${Math.round(this.eraserRadius())} px`
+  readonly eraserRadiusLabel = computed(
+    () => `${Math.round(this.eraserRadius())} px`
   );
 
   readonly hoveredTarget = signal<SelectTarget | null>(null);
@@ -723,7 +828,8 @@ export class TacticsStateService {
     side: TeamSide,
     mutator: (team: TeamConfig) => TeamConfig
   ): void {
-    const signalRef = side === 'left' ? this.leftTeamState : this.rightTeamState;
+    const signalRef =
+      side === 'left' ? this.leftTeamState : this.rightTeamState;
     signalRef.update((current) => {
       const base = this.cloneTeamConfig(current);
       const next = this.cloneTeamConfig(mutator(base));
@@ -734,7 +840,8 @@ export class TacticsStateService {
   }
 
   private replaceTeamState(side: TeamSide, next: TeamConfig): void {
-    const signalRef = side === 'left' ? this.leftTeamState : this.rightTeamState;
+    const signalRef =
+      side === 'left' ? this.leftTeamState : this.rightTeamState;
     signalRef.set(this.cloneTeamConfig(next));
     this.syncTeamNameDraft(side);
     this.syncTeamsToScene();
@@ -791,19 +898,27 @@ export class TacticsStateService {
   private createTeamPlayerId(side: TeamSide): string {
     const prefix = side === 'left' ? 'left' : 'right';
     if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-      return `${prefix}-${(crypto as { randomUUID?: () => string }).randomUUID?.() ?? Math.random().toString(16).slice(2)}`;
+      return `${prefix}-${
+        (crypto as { randomUUID?: () => string }).randomUUID?.() ??
+        Math.random().toString(16).slice(2)
+      }`;
     }
     return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
   }
 
   private createQuickPlayerId(): string {
     if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-      return `quick-${(crypto as { randomUUID?: () => string }).randomUUID?.() ?? Math.random().toString(16).slice(2)}`;
+      return `quick-${
+        (crypto as { randomUUID?: () => string }).randomUUID?.() ??
+        Math.random().toString(16).slice(2)
+      }`;
     }
     return `quick-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
   }
 
-  private getQuickPlayer(playerId: string | undefined): QuickPlayer | undefined {
+  private getQuickPlayer(
+    playerId: string | undefined
+  ): QuickPlayer | undefined {
     if (!playerId) {
       return undefined;
     }
@@ -861,12 +976,16 @@ export class TacticsStateService {
       ? raw.players.map((player, index) => ({
           id: player?.id ?? `${teamId}-player-${index}`,
           name: (player?.name ?? `Spieler ${index + 1}`).toString(),
-          pompfenId: this.ensurePompfenId((player as TeamPlayerConfig | undefined)?.pompfenId),
+          pompfenId: this.ensurePompfenId(
+            (player as TeamPlayerConfig | undefined)?.pompfenId
+          ),
         }))
       : [];
     return {
       id: teamId,
-      name: (raw.name ?? DEFAULT_TEAM_NAMES[side]).toString().trim() || DEFAULT_TEAM_NAMES[side],
+      name:
+        (raw.name ?? DEFAULT_TEAM_NAMES[side]).toString().trim() ||
+        DEFAULT_TEAM_NAMES[side],
       colors: {
         primary: raw.colors?.primary ?? defaults.primary,
         secondary: raw.colors?.secondary ?? defaults.secondary,
@@ -878,7 +997,8 @@ export class TacticsStateService {
 
   private ensurePompfenId(value: unknown): PompfenId | null {
     const candidate = typeof value === 'string' ? value : null;
-    return candidate && this.pompfenOptions.some((option) => option.id === candidate)
+    return candidate &&
+      this.pompfenOptions.some((option) => option.id === candidate)
       ? (candidate as PompfenId)
       : null;
   }
@@ -887,7 +1007,6 @@ export class TacticsStateService {
     const normalized = this.normalizeImportedTeam(config, side);
     this.replaceTeamState(side, normalized);
   }
-
 
   private restoreTeamsFromStorage(): void {
     const entries = this.storedTeams();
@@ -934,16 +1053,16 @@ export class TacticsStateService {
     const leftTeam = this.leftTeam();
     const rightTeam = this.rightTeam();
     const quickPlayers = this.quickPlayersState();
-    const validPlayerIds = new Set(
-      [
-        ...leftTeam.players.map((player) => player.id),
-        ...rightTeam.players.map((player) => player.id),
-        ...Object.keys(quickPlayers),
-      ]
-    );
+    const validPlayerIds = new Set([
+      ...leftTeam.players.map((player) => player.id),
+      ...rightTeam.players.map((player) => player.id),
+      ...Object.keys(quickPlayers),
+    ]);
     this.sceneSnapshot.update((snapshot) => {
       const filteredTokens = snapshot.scene.tokens
-        .filter((token) => !token.playerId || validPlayerIds.has(token.playerId))
+        .filter(
+          (token) => !token.playerId || validPlayerIds.has(token.playerId)
+        )
         .map((token) => {
           if (!token.playerId) {
             return token;
@@ -954,7 +1073,8 @@ export class TacticsStateService {
           }
           const needsLabelUpdate = token.label !== quick.name;
           const needsColorUpdate =
-            !token.color || token.color.toLowerCase() !== quick.color.toLowerCase();
+            !token.color ||
+            token.color.toLowerCase() !== quick.color.toLowerCase();
           if (!needsLabelUpdate && !needsColorUpdate) {
             return token;
           }
@@ -1003,10 +1123,12 @@ export class TacticsStateService {
   }
 
   private slugify(value: string): string {
-    return value
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '') || 'team';
+    return (
+      value
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'team'
+    );
   }
 
   private loadStoredTeams(): StoredTeamEntry[] {
@@ -1078,7 +1200,10 @@ export class TacticsStateService {
     };
     let nextEntries: StoredTeamEntry[] = [];
     this.storedTeams.update((entries) => {
-      nextEntries = [entry, ...entries.filter((existing) => existing.id !== entry.id)];
+      nextEntries = [
+        entry,
+        ...entries.filter((existing) => existing.id !== entry.id),
+      ];
       nextEntries.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
       return nextEntries;
     });
@@ -1269,12 +1394,16 @@ export class TacticsStateService {
   readonly lastPointerEvent = signal<string | null>(null);
   readonly eraserPreview = signal<{ x: number; y: number } | null>(null);
   readonly colorMenuContext = signal<
-    |
-      { kind: 'selection' }
-    |
-      { kind: 'tool'; tool: 'pen' | 'line' | 'arrow' | 'cone' }
+    | { kind: 'selection' }
+    | { kind: 'tool'; tool: 'pen' | 'line' | 'arrow' | 'cone' }
     | null
   >(null);
+  readonly selectedTargets = signal<SelectTarget[]>([]);
+  readonly marqueeSelection = signal<{
+    origin: { x: number; y: number };
+    current: { x: number; y: number };
+  } | null>(null);
+  readonly tokenScaleOverrides = signal<Record<string, number>>({});
 
   readonly leftPlayers = computed(() => this.leftTeamState().players);
   readonly rightPlayers = computed(() => this.rightTeamState().players);
@@ -1295,9 +1424,60 @@ export class TacticsStateService {
       this.scene().scene.drawings.find((drawing) => drawing.id === id) ?? null
     );
   });
+  readonly selectedTokenIds = computed(() => {
+    const ids = new Set<string>();
+    const overrides = this.selectedTargets();
+    overrides.forEach((target) => {
+      if (target.type === 'token') {
+        ids.add(target.id);
+      }
+    });
+    const primary = this.selectedTokenId();
+    if (primary) {
+      ids.add(primary);
+    }
+    return Array.from(ids);
+  });
+  readonly selectedDrawingIds = computed(() => {
+    const ids = new Set<string>();
+    this.selectedTargets().forEach((target) => {
+      if (target.type === 'drawing') {
+        ids.add(target.id);
+      }
+    });
+    const primary = this.selectedDrawingId();
+    if (primary) {
+      ids.add(primary);
+    }
+    return Array.from(ids);
+  });
   readonly hasJugg = computed(() =>
     this.scene().scene.tokens.some((token) => token.id === JUGG_ID)
   );
+  readonly tokenScaleValue = computed(() => {
+    const selectedIds = this.selectedTokenIds();
+    const overrides = this.tokenScaleOverrides();
+    if (!selectedIds.length) {
+      return this.tokenScale();
+    }
+    const values = selectedIds.map((id) => overrides[id] ?? this.tokenScale());
+    return values[values.length - 1];
+  });
+  readonly tokenScaleLabel = computed(() => {
+    const selectedIds = this.selectedTokenIds();
+    const format = (value: number) =>
+      `${Math.round((value / DEFAULT_TOKEN_SCALE) * 100)}%`;
+    if (selectedIds.length === 0) {
+      return format(this.tokenScale());
+    }
+    const overrides = this.tokenScaleOverrides();
+    const values = selectedIds.map((id) => overrides[id] ?? this.tokenScale());
+    const distinct = new Set(values.map((value) => value.toFixed(4)));
+    if (distinct.size > 1) {
+      return 'Mehrere';
+    }
+    return format(values[0]);
+  });
   readonly selectedStatus = computed(() => this.computeSelectedStatus());
   readonly toolStatus = computed<ToolStatus | null>(() => {
     const tool = this.selectedTool();
@@ -1413,10 +1593,15 @@ export class TacticsStateService {
     this.editingTeamNameState.set(null);
   }
 
-  updateTeamColor(side: TeamSide, key: 'primary' | 'secondary', value: string): void {
-    const fallback = key === 'primary'
-      ? DEFAULT_TEAM_COLORS[side].primary
-      : DEFAULT_TEAM_COLORS[side].secondary;
+  updateTeamColor(
+    side: TeamSide,
+    key: 'primary' | 'secondary',
+    value: string
+  ): void {
+    const fallback =
+      key === 'primary'
+        ? DEFAULT_TEAM_COLORS[side].primary
+        : DEFAULT_TEAM_COLORS[side].secondary;
     const normalized = value?.trim()?.length ? value : fallback;
     this.updateTeamState(side, (team) => ({
       ...team,
@@ -1625,7 +1810,9 @@ export class TacticsStateService {
         ...snapshot,
         scene: {
           ...snapshot.scene,
-          tokens: hasJugg ? tokensWithDemo : [...tokensWithDemo, this.createJuggToken(field)],
+          tokens: hasJugg
+            ? tokensWithDemo
+            : [...tokensWithDemo, this.createJuggToken(field)],
         },
       };
     });
@@ -1641,6 +1828,56 @@ export class TacticsStateService {
     this.selectTool('select');
     this.spawnJugg();
   }
+
+  readonly resetDemoPlayersToStartPositions = (): void => {
+    if (!this.hasQuickPlayersInScene()) {
+      this.createDemoPlayer();
+      return;
+    }
+
+    this.applySceneUpdate((snapshot) => {
+      const { field } = snapshot.scene;
+
+      const tokens = snapshot.scene.tokens.map((token) => {
+        if (token.teamId !== QUICK_TEAM_ID) {
+          return token;
+        }
+
+        const player = Object.values(this.quickPlayersState()).find(
+          (candidate) => candidate.tokenId === token.id
+        );
+
+        if (!player) {
+          return token;
+        }
+
+        const definition = DEMO_FORMATION.find(
+          (entry) => entry.name === player.name && entry.color === player.color
+        );
+
+        if (!definition) {
+          return token;
+        }
+
+        return {
+          ...token,
+          x: field.width * definition.xFactor,
+          y: field.height * definition.yFactor,
+        };
+      });
+
+      return {
+        ...snapshot,
+        scene: {
+          ...snapshot.scene,
+          tokens,
+        },
+      };
+    });
+
+    this.selectedTarget.set(null);
+    this.hoveredTarget.set(null);
+  };
 
   startEditingPlayer(side: TeamSide, playerId: string): void {
     this.editingPlayerState.set({ side, playerId });
@@ -1690,7 +1927,11 @@ export class TacticsStateService {
     this.persistTeamState(side);
   }
 
-  assignPompfenToPlayer(side: TeamSide, playerId: string, pompfenId: PompfenId | null): void {
+  assignPompfenToPlayer(
+    side: TeamSide,
+    playerId: string,
+    pompfenId: PompfenId | null
+  ): void {
     this.updateTeamState(side, (team) => ({
       ...team,
       players: team.players.map((player) =>
@@ -1734,7 +1975,11 @@ export class TacticsStateService {
     return player.id;
   }
 
-  onTeamLogoClick(event: MouseEvent, side: TeamSide, input: HTMLInputElement): void {
+  onTeamLogoClick(
+    event: MouseEvent,
+    side: TeamSide,
+    input: HTMLInputElement
+  ): void {
     event.preventDefault();
     event.stopPropagation();
     const team = this.getTeamState(side);
@@ -1773,7 +2018,11 @@ export class TacticsStateService {
     }
   }
 
-  handlePompfenDropOnPlayer(event: DragEvent, side: TeamSide, playerId: string): void {
+  handlePompfenDropOnPlayer(
+    event: DragEvent,
+    side: TeamSide,
+    playerId: string
+  ): void {
     event.preventDefault();
     const pompfenId = this.readPompfenId(event);
     if (!pompfenId) {
@@ -1819,13 +2068,19 @@ export class TacticsStateService {
       const text = typeof reader.result === 'string' ? reader.result : '';
       try {
         const payload = JSON.parse(text) as Partial<TeamFilePayload>;
-        if (payload?.schema !== TEAM_FILE_SCHEMA || payload?.version !== TEAM_FILE_VERSION) {
+        if (
+          payload?.schema !== TEAM_FILE_SCHEMA ||
+          payload?.version !== TEAM_FILE_VERSION
+        ) {
           throw new Error('Unsupported team file format');
         }
         if (!payload.team) {
           throw new Error('Team payload missing');
         }
-        this.applyTeamConfig(side, this.normalizeImportedTeam(payload.team, side));
+        this.applyTeamConfig(
+          side,
+          this.normalizeImportedTeam(payload.team, side)
+        );
         this.persistTeamState(side);
         this.rememberStoredTeam(this.getTeamState(side));
         this.closeTeamDialog();
@@ -1882,8 +2137,13 @@ export class TacticsStateService {
       queueMicrotask(() => this.updateCanvasCursor());
     });
     effect(() => {
-      const scaleFactor = this.tokenScale();
-      this.applyTokenConfiguration(scaleFactor);
+      const base = this.tokenScale();
+      const overrides = this.tokenScaleOverrides();
+      const maxOverride = Object.values(overrides).reduce(
+        (max, value) => Math.max(max, value),
+        base
+      );
+      this.applyTokenConfiguration(maxOverride);
     });
     effect(() => {
       const factor = this.strokeWidthFactor();
@@ -1896,8 +2156,31 @@ export class TacticsStateService {
         this.engine?.draw();
       }
     });
+    effect(() => {
+      const tokenIds = new Set(
+        this.scene().scene.tokens.map((token) => token.id)
+      );
+      const base = this.tokenScale();
+      const overrides = this.tokenScaleOverrides();
+      let changed = false;
+      const next: Record<string, number> = {};
+      for (const [id, value] of Object.entries(overrides)) {
+        if (!tokenIds.has(id)) {
+          changed = true;
+          continue;
+        }
+        if (Math.abs(value - base) < 0.001) {
+          changed = true;
+          continue;
+        }
+        next[id] = value;
+      }
+      if (changed) {
+        this.tokenScaleOverrides.set(next);
+      }
+    });
     this.loadPersistedSession();
-    if (!this.pendingSession && !this.hasQuickPlayersInScene()) {
+    if (!this.hasQuickPlayersInScene()) {
       this.createDemoPlayer();
     }
   }
@@ -2169,56 +2452,75 @@ export class TacticsStateService {
   }
 
   deleteSelectedElement(): void {
-    const rawTarget = this.selectedTarget();
-    if (!rawTarget) {
-      return;
+    const primary = this.normalizeTarget(this.selectedTarget());
+    const group = this.selectedTargets()
+      .map((entry) => this.normalizeTarget(entry))
+      .filter((entry): entry is SelectTarget => Boolean(entry));
+    const combined: SelectTarget[] = [...group];
+    if (
+      primary &&
+      !combined.some((entry) => this.isSameTarget(entry, primary))
+    ) {
+      combined.push(primary);
     }
-    const target = this.normalizeTarget(rawTarget);
-    if (!target) {
+    if (!combined.length) {
       return;
     }
     const snapshot = this.scene();
-    if (target.type === 'token') {
-      const exists = snapshot.scene.tokens.some(
-        (token) => token.id === target.id
+    const tokenIds = combined
+      .filter((entry) => entry.type === 'token')
+      .map((entry) => entry.id);
+    const drawingIds = combined
+      .filter((entry) => entry.type === 'drawing')
+      .map((entry) => entry.id);
+
+    if (tokenIds.length) {
+      const tokenSet = new Set(tokenIds);
+      const removedPlayers = new Set<string>();
+      const tokensExist = snapshot.scene.tokens.some((token) =>
+        tokenSet.has(token.id)
       );
-      if (!exists) {
-        return;
-      }
-      let removedPlayerId: string | undefined;
-      this.applySceneUpdate((state) => ({
-        ...state,
-        scene: {
-          ...state.scene,
-          tokens: state.scene.tokens.filter((token) => {
-            if (token.id !== target.id) {
+      if (tokensExist) {
+        this.applySceneUpdate((state) => {
+          const nextTokens = state.scene.tokens.filter((token) => {
+            if (!tokenSet.has(token.id)) {
               return true;
             }
-            removedPlayerId = token.playerId;
+            if (token.playerId) {
+              removedPlayers.add(token.playerId);
+            }
             return false;
-          }),
-        },
-      }));
-      if (removedPlayerId) {
-        this.removeQuickPlayer(removedPlayerId);
+          });
+          return {
+            ...state,
+            scene: {
+              ...state.scene,
+              tokens: nextTokens,
+            },
+          };
+        });
+        removedPlayers.forEach((playerId) => this.removeQuickPlayer(playerId));
       }
-    } else {
-      const exists = snapshot.scene.drawings.some(
-        (drawing) => drawing.id === target.id
-      );
-      if (!exists) {
-        return;
-      }
-      this.applySceneUpdate((state) => ({
-        ...state,
-        scene: {
-          ...state.scene,
-          drawings: state.scene.drawings.filter(
-            (drawing) => drawing.id !== target.id
-          ),
-        },
-      }));
     }
+
+    if (drawingIds.length) {
+      const drawingSet = new Set(drawingIds);
+      const drawingsExist = snapshot.scene.drawings.some((drawing) =>
+        drawingSet.has(drawing.id)
+      );
+      if (drawingsExist) {
+        this.applySceneUpdate((state) => ({
+          ...state,
+          scene: {
+            ...state.scene,
+            drawings: state.scene.drawings.filter(
+              (drawing) => !drawingSet.has(drawing.id)
+            ),
+          },
+        }));
+      }
+    }
+    this.selectedTargets.set([]);
     this.selectedTarget.set(null);
     this.hoveredTarget.set(null);
     this.activeDrawingHandle.set(null);
@@ -2620,10 +2922,39 @@ export class TacticsStateService {
       return;
     }
     const clamped = this.clamp(parsed, TOKEN_SCALE_MIN, TOKEN_SCALE_MAX);
-    if (Math.abs(clamped - this.tokenScale()) < 0.001) {
+    const selectedIds = this.selectedTokenIds();
+    if (selectedIds.length === 0) {
+      if (Math.abs(clamped - this.tokenScale()) < 0.001) {
+        return;
+      }
+      this.tokenScale.set(clamped);
       return;
     }
-    this.tokenScale.set(clamped);
+
+    const base = this.tokenScale();
+    const overrides = { ...this.tokenScaleOverrides() };
+    let changed = false;
+    selectedIds.forEach((id) => {
+      const current = overrides[id] ?? base;
+      if (Math.abs(clamped - current) < 0.001) {
+        return;
+      }
+      if (Math.abs(clamped - base) < 0.001) {
+        if (id in overrides) {
+          delete overrides[id];
+          changed = true;
+        }
+      } else {
+        overrides[id] = clamped;
+        changed = true;
+      }
+    });
+
+    if (!changed) {
+      return;
+    }
+    this.tokenScaleOverrides.set(overrides);
+    this.engine?.draw();
   }
 
   changeStrokeWidthFactor(rawValue: string): void {
@@ -2785,7 +3116,7 @@ export class TacticsStateService {
         shape: 'rectangle' as const,
         width: juggWidth,
         height: juggHeight,
-              } satisfies Token;
+      } satisfies Token;
       return {
         ...state,
         scene: {
@@ -2795,8 +3126,9 @@ export class TacticsStateService {
       };
     });
 
+    this.selectedTarget.set(null);
+    this.selectedTargets.set([]);
     this.selectTool('select');
-    this.selectedTarget.set({ type: 'token', id: JUGG_ID });
     this.engine?.draw();
   }
 
@@ -3108,8 +3440,6 @@ export class TacticsStateService {
       renderedScenes.forEach((frame) => frame.bitmap.close());
       renderedScenes = [];
     }
-
-    return;
   }
 
   private async exportAnimationAsGif(params: {
@@ -3420,10 +3750,10 @@ export class TacticsStateService {
         this.renderFieldBackground(ctx, state)
       ),
       engine.registerLayerRenderer('drawings', (ctx, state) =>
-        this.renderDrawings(ctx, state)
-      ),
-      engine.registerLayerRenderer('tokens', (ctx, state) =>
         this.renderTokens(ctx, state)
+      ),
+      engine.registerLayerRenderer('drawings', (ctx, state) =>
+        this.renderDrawings(ctx, state)
       ),
       engine.registerLayerRenderer('overlay', (ctx, state) =>
         this.renderOverlay(ctx, state)
@@ -3672,16 +4002,16 @@ export class TacticsStateService {
 
     if (dataKind === 'select' && event.data) {
       const selectData = event.data as SelectToolEventData;
-      this.consumeSelectEvent(selectData);
+      this.consumeSelectEvent(selectData, event.context);
       fragments.push('· Auswahl');
-      if (selectData.target) {
+      if ('target' in selectData && selectData.target) {
         fragments.push(`· ${this.describeTarget(selectData.target)}`);
       }
     } else if (event.toolId === 'select' && event.data) {
       const data = event.data as SelectToolEventData;
-      this.consumeSelectEvent(data);
+      this.consumeSelectEvent(data, event.context);
       fragments.push(`· ${data.kind}`);
-      if (data.target) {
+      if ('target' in data && data.target) {
         fragments.push(`· ${this.describeTarget(data.target)}`);
       }
     } else if (event.toolId === 'line' && event.data) {
@@ -3718,12 +4048,41 @@ export class TacticsStateService {
     }
   }
 
-  private consumeSelectEvent(event: SelectToolEventData): void {
-    const target = event.target ?? null;
+  private consumeSelectEvent(
+    event: SelectToolEventData,
+    context: PointerContext
+  ): void {
+    const target = 'target' in event ? event.target ?? null : null;
     switch (event.kind) {
       case 'hover':
         this.hoveredTarget.set(target);
         break;
+      case 'marquee': {
+        const rect = event.rect;
+        if (event.phase === 'end') {
+          this.marqueeSelection.set(null);
+          const normalized = event.targets
+            .map((entry) => this.normalizeTarget(entry))
+            .filter((entry): entry is SelectTarget => Boolean(entry));
+          this.selectedTargets.set(normalized);
+          if (!normalized.length) {
+            this.selectedTarget.set(null);
+          }
+        } else {
+          this.marqueeSelection.set({
+            origin: { x: rect.x1, y: rect.y1 },
+            current: { x: rect.x2, y: rect.y2 },
+          });
+        }
+        break;
+      }
+      case 'select-group': {
+        const normalized = event.targets
+          .map((entry) => this.normalizeTarget(entry))
+          .filter((entry): entry is SelectTarget => Boolean(entry));
+        this.selectedTargets.set(normalized);
+        break;
+      }
       case 'select': {
         const normalized = this.normalizeTarget(target);
         this.selectedTarget.set(normalized);
@@ -3732,6 +4091,7 @@ export class TacticsStateService {
           this.isDraggingToken.set(false);
           this.isDraggingDrawing.set(false);
           this.activeDrawingHandle.set(null);
+          this.selectedTargets.set([]);
         }
         if (normalized?.type === 'drawing') {
           this.bringDrawingToFront(normalized.id);
@@ -3771,15 +4131,70 @@ export class TacticsStateService {
   }
 
   private computeSelectedStatus(): SelectedStatus | null {
-    const rawTarget = this.selectedTarget();
-    if (!rawTarget) {
+    const snapshot = this.scene();
+    const primary = this.normalizeTarget(this.selectedTarget());
+    const group = this.selectedTargets()
+      .map((entry) => this.normalizeTarget(entry))
+      .filter((entry): entry is SelectTarget => Boolean(entry));
+
+    const combined: SelectTarget[] = [...group];
+    if (
+      primary &&
+      !combined.some((entry) => this.isSameTarget(entry, primary))
+    ) {
+      combined.push(primary);
+    }
+
+    if (!combined.length) {
       return null;
     }
-    const target = this.normalizeTarget(rawTarget);
+
+    const tokenTargets = combined.filter((entry) => entry.type === 'token');
+    const drawingTargets = combined.filter((entry) => entry.type === 'drawing');
+
+    const items: SelectionItem[] = combined
+      .map((entry) => this.createSelectionItem(entry, snapshot))
+      .filter((entry): entry is SelectionItem => Boolean(entry));
+
+    const tokenIds = tokenTargets.map((entry) => entry.id);
+
+    if (tokenTargets.length > 1 && drawingTargets.length === 0) {
+      const scales = tokenIds.map((id) => this.getTokenScaleFor(id));
+      const uniform = scales.every(
+        (value) => Math.abs(value - scales[0]) < 0.001
+      )
+        ? scales[0]
+        : null;
+      return {
+        type: 'token-group',
+        label: `${tokenIds.length} Spieler ausgewählt`,
+        count: tokenIds.length,
+        tokenIds,
+        uniformScale: uniform,
+        color: null,
+        supportsColor: false,
+        palette: TOKEN_COLOR_OPTIONS,
+        items,
+      };
+    }
+
+    if (tokenTargets.length && drawingTargets.length) {
+      return {
+        type: 'mixed',
+        label: `${combined.length} Elemente ausgewählt`,
+        color: null,
+        supportsColor: false,
+        palette: [],
+        tokenIds,
+        items,
+      };
+    }
+
+    const target = primary ?? combined[0];
     if (!target) {
       return null;
     }
-    const snapshot = this.scene();
+
     if (target.type === 'token') {
       const token = snapshot.scene.tokens.find(
         (entry) => entry.id === target.id
@@ -3802,6 +4217,8 @@ export class TacticsStateService {
           pompfenId: null,
           isQuick: false,
           name: 'Jugg',
+          tokenIds,
+          items,
         };
       }
       const quickPlayer = this.getQuickPlayer(token.playerId);
@@ -3811,13 +4228,15 @@ export class TacticsStateService {
             (p) => p.id === token.playerId
           )
         : undefined;
-      const name = quickPlayer?.name ?? teamPlayer?.name ?? token.label ?? `Token ${token.id}`;
+      const name =
+        quickPlayer?.name ??
+        teamPlayer?.name ??
+        token.label ??
+        `Token ${token.id}`;
       const playerRole = teamPlayer
         ? this.getPompfenTitle(teamPlayer.pompfenId)
         : undefined;
-      const label = playerRole
-        ? `${name} - ${playerRole}`
-        : name;
+      const label = playerRole ? `${name} - ${playerRole}` : name;
       const pompfenId = quickPlayer?.pompfenId ?? teamPlayer?.pompfenId ?? null;
       return {
         type: 'token',
@@ -3831,6 +4250,8 @@ export class TacticsStateService {
         pompfenId,
         isQuick: Boolean(quickPlayer),
         name,
+        tokenIds,
+        items,
       };
     }
 
@@ -3864,6 +4285,70 @@ export class TacticsStateService {
       color,
       supportsColor,
       palette: supportsColor ? this.getPaletteForDrawing(drawing.kind) : [],
+      tokenIds,
+      items,
+    };
+  }
+
+  private createSelectionItem(
+    target: SelectTarget,
+    snapshot: SceneSnapshot
+  ): SelectionItem | null {
+    if (target.type === 'token') {
+      const token = snapshot.scene.tokens.find(
+        (entry) => entry.id === target.id
+      );
+      if (!token) {
+        return null;
+      }
+      const quickPlayer = this.getQuickPlayer(token.playerId);
+      const teamSide = this.resolveTeamSide(token.teamId);
+      const teamPlayer = teamSide
+        ? this.getTeamState(teamSide).players.find(
+            (player) => player.id === token.playerId
+          )
+        : undefined;
+      const name =
+        quickPlayer?.name ??
+        teamPlayer?.name ??
+        token.label ??
+        `Token ${token.id}`;
+      const role = teamPlayer
+        ? this.getPompfenTitle(teamPlayer.pompfenId)
+        : undefined;
+      const label = role ? `${name} · ${role}` : name;
+      return {
+        id: token.id,
+        kind: 'token',
+        label,
+        color: this.getTokenFillColor(token),
+        tokenScale: this.getTokenScaleFor(token.id),
+      };
+    }
+
+    const drawing = snapshot.scene.drawings.find(
+      (entry) => entry.id === target.id
+    );
+    if (!drawing) {
+      return null;
+    }
+
+    let rawColor: string | null = null;
+    if (drawing.kind === 'cone') {
+      rawColor = drawing.fill;
+    } else if (
+      drawing.kind === 'line' ||
+      drawing.kind === 'pen' ||
+      drawing.kind === 'arrow'
+    ) {
+      rawColor = drawing.stroke;
+    }
+
+    return {
+      id: drawing.id,
+      kind: 'drawing',
+      label: this.describeDrawingLabel(drawing),
+      color: this.getDisplayColor(rawColor),
     };
   }
 
@@ -3875,6 +4360,28 @@ export class TacticsStateService {
       return { type: 'drawing', id: target.id };
     }
     return target;
+  }
+
+  private isSameTarget(
+    a: SelectTarget | null | undefined,
+    b: SelectTarget | null | undefined
+  ): boolean {
+    if (!a && !b) {
+      return true;
+    }
+    if (!a || !b) {
+      return false;
+    }
+    if (a.type !== b.type) {
+      return false;
+    }
+    if (a.id !== b.id) {
+      return false;
+    }
+    if (a.type === 'drawing' && b.type === 'drawing') {
+      return a.handle === b.handle && a.action === b.action;
+    }
+    return true;
   }
 
   private updateSelectedColor(color: string): void {
@@ -4438,17 +4945,25 @@ export class TacticsStateService {
     }
     const hoveredDrawingId = this.hoveredDrawingId();
     const selectedDrawingId = this.selectedDrawingId();
+    const selectedDrawingIds = new Set(this.selectedDrawingIds());
     const hoveredHandle = this.hoveredDrawingHandle();
     const activeHandle = this.activeHandleState();
     const isDraggingDrawing = this.isDraggingDrawing();
     const drawings = [...snapshot.scene.drawings];
     const drawingPriority = (drawing: Drawing): number => {
       let value = 0;
-      if (drawing.id === selectedDrawingId) {
+      if (selectedDrawingId && drawing.id === selectedDrawingId) {
         value += 4;
       }
-      if (isDraggingDrawing && drawing.id === selectedDrawingId) {
+      if (
+        isDraggingDrawing &&
+        selectedDrawingId &&
+        drawing.id === selectedDrawingId
+      ) {
         value += 8;
+      }
+      if (selectedDrawingIds.has(drawing.id)) {
+        value += 2;
       }
       return value;
     };
@@ -4463,9 +4978,10 @@ export class TacticsStateService {
         });
         return;
       }
+      const isSelected = selectedDrawingIds.has(drawing.id);
       if (drawing.kind === 'line') {
         this.renderLineDrawing(ctx, drawing, {
-          isSelected: drawing.id === selectedDrawingId,
+          isSelected,
           isHovered: drawing.id === hoveredDrawingId,
           hoveredHandle,
           activeHandle,
@@ -4475,7 +4991,7 @@ export class TacticsStateService {
       }
       if (drawing.kind === 'pen') {
         this.renderPenDrawing(ctx, drawing, {
-          isSelected: drawing.id === selectedDrawingId,
+          isSelected,
           isHovered: drawing.id === hoveredDrawingId,
           isDragging: isDraggingDrawing && drawing.id === selectedDrawingId,
         });
@@ -4484,7 +5000,7 @@ export class TacticsStateService {
 
       if (drawing.kind === 'arrow') {
         this.renderArrowDrawing(ctx, drawing, {
-          isSelected: drawing.id === selectedDrawingId,
+          isSelected,
           isHovered: drawing.id === hoveredDrawingId,
           hoveredHandle,
           activeHandle,
@@ -4495,7 +5011,7 @@ export class TacticsStateService {
 
       if (drawing.kind === 'cone') {
         this.renderConeDrawing(ctx, drawing, {
-          isSelected: drawing.id === selectedDrawingId,
+          isSelected,
           isHovered: drawing.id === hoveredDrawingId,
           hoveredHandle,
           activeHandle,
@@ -4512,9 +5028,10 @@ export class TacticsStateService {
       isSelected: boolean;
       isHovered: boolean;
       hoveredHandle: SelectTarget | null;
-      activeHandle:
-        | { drawingId: string; handle: 'start' | 'end' | 'radius' }
-        | null;
+      activeHandle: {
+        drawingId: string;
+        handle: 'start' | 'end' | 'radius';
+      } | null;
       isDragging: boolean;
     }
   ): void {
@@ -4623,9 +5140,10 @@ export class TacticsStateService {
       isSelected: boolean;
       isHovered: boolean;
       hoveredHandle: SelectTarget | null;
-      activeHandle:
-        | { drawingId: string; handle: 'start' | 'end' | 'radius' }
-        | null;
+      activeHandle: {
+        drawingId: string;
+        handle: 'start' | 'end' | 'radius';
+      } | null;
       isDragging: boolean;
     }
   ): void {
@@ -4731,9 +5249,10 @@ export class TacticsStateService {
       isSelected: boolean;
       isHovered: boolean;
       hoveredHandle: SelectTarget | null;
-      activeHandle:
-        | { drawingId: string; handle: 'start' | 'end' | 'radius' }
-        | null;
+      activeHandle: {
+        drawingId: string;
+        handle: 'start' | 'end' | 'radius';
+      } | null;
       isDragging: boolean;
     }
   ): void {
@@ -4924,25 +5443,34 @@ export class TacticsStateService {
       return;
     }
     const hovered = this.hoveredTokenId();
-    const selected = this.selectedTokenId();
+    const primarySelectedToken = this.selectedTokenId();
+    const selectedTokens = new Set(this.selectedTokenIds());
     const isDragging = this.isDraggingToken();
     const showNames = this.showPlayerNames();
     const scale = Math.max(
       0.0001,
       Math.hypot(state.fieldToCanvas.a, state.fieldToCanvas.b)
     );
-    const scaleFactor = this.tokenScale();
-    const baseRadius = this.getTokenRadius(scaleFactor);
+    const baseScale = this.tokenScale();
+    const overrides = this.tokenScaleOverrides();
+    const baseRadius = this.getTokenRadius(baseScale);
     const defaultJugg = this.getJuggDimensions();
 
     const tokens = [...snapshot.scene.tokens];
     const tokenPriority = (token: Token): number => {
       let value = 0;
-      if (token.id === selected) {
-        value += 4;
+      if (primarySelectedToken && token.id === primarySelectedToken) {
+        value += 6;
       }
-      if (isDragging && token.id === selected) {
-        value += 8;
+      if (selectedTokens.has(token.id)) {
+        value += 2;
+      }
+      if (
+        isDragging &&
+        primarySelectedToken &&
+        token.id === primarySelectedToken
+      ) {
+        value += 4;
       }
       return value;
     };
@@ -4951,7 +5479,8 @@ export class TacticsStateService {
     tokens.forEach((token) => {
       const fillColor = this.getTokenFillColor(token);
       const isJugg = token.id === JUGG_ID || token.shape === 'rectangle';
-      const tokenRadius = baseRadius;
+      const tokenScale = overrides[token.id] ?? baseScale;
+      const tokenRadius = this.getTokenRadius(tokenScale);
       ctx.save();
       ctx.shadowColor = 'rgba(15, 23, 42, 0.3)';
       ctx.shadowBlur = 2.8;
@@ -4972,14 +5501,15 @@ export class TacticsStateService {
         ctx.strokeStyle = DEFAULT_JUGG_STROKE;
         ctx.stroke();
 
-        if (token.id === hovered || token.id === selected) {
+        const isSelectedToken = selectedTokens.has(token.id);
+        if (token.id === hovered || isSelectedToken) {
           ctx.save();
-          ctx.lineWidth =
-            token.id === selected
-              ? SELECTION_OUTLINE_EXTRA * 0.3
-              : SELECTION_OUTLINE_EXTRA * 0.2;
-          ctx.strokeStyle =
-            token.id === selected ? '#10b981' : 'rgba(148, 163, 184, 0.55)';
+          ctx.lineWidth = isSelectedToken
+            ? Math.max(0.8, tokenRadius * 0.21)
+            : Math.max(0.6, tokenRadius * 0.15);
+          ctx.strokeStyle = isSelectedToken
+            ? 'rgba(59, 130, 246, 0.95)'
+            : 'rgba(148, 163, 184, 0.55)';
           const padding = 1.5;
           const outlineWidth = width + padding * 2;
           const outlineHeight = height + padding * 2;
@@ -4999,7 +5529,11 @@ export class TacticsStateService {
           ctx.restore();
         }
 
-        if (isDragging && token.id === selected) {
+        if (
+          isDragging &&
+          primarySelectedToken &&
+          token.id === primarySelectedToken
+        ) {
           ctx.save();
           ctx.strokeStyle = 'rgba(16, 185, 129, 0.35)';
           ctx.setLineDash([1.2, 1.2]);
@@ -5027,18 +5561,32 @@ export class TacticsStateService {
         ctx.arc(token.x, token.y, tokenRadius, 0, Math.PI * 2);
         ctx.fill();
 
-        if (token.id === hovered || token.id === selected) {
+        const isSelectedToken = selectedTokens.has(token.id);
+        if (token.id === hovered || isSelectedToken) {
           ctx.shadowColor = 'transparent';
-          ctx.lineWidth =
-            token.id === selected
-              ? SELECTION_OUTLINE_EXTRA * 0.35
-              : SELECTION_OUTLINE_EXTRA * 0.25;
-          ctx.strokeStyle =
-            token.id === selected ? '#10b981' : 'rgba(148, 163, 184, 0.55)';
+          const outlineWidth = isSelectedToken
+            ? Math.max(0.7, tokenRadius * 0.2)
+            : Math.max(0.5, tokenRadius * 0.14);
+          ctx.lineWidth = outlineWidth;
+          ctx.strokeStyle = isSelectedToken
+            ? 'rgba(59, 130, 246, 0.9)'
+            : 'rgba(148, 163, 184, 0.55)';
+          ctx.beginPath();
+          ctx.arc(
+            token.x,
+            token.y,
+            tokenRadius + outlineWidth * 0.45,
+            0,
+            Math.PI * 2
+          );
           ctx.stroke();
         }
 
-        if (isDragging && token.id === selected) {
+        if (
+          isDragging &&
+          primarySelectedToken &&
+          token.id === primarySelectedToken
+        ) {
           ctx.strokeStyle = 'rgba(16, 185, 129, 0.35)';
           ctx.setLineDash([1.2, 1.2]);
           ctx.lineWidth = SELECTION_OUTLINE_EXTRA * 0.25;
@@ -5091,7 +5639,8 @@ export class TacticsStateService {
           const metrics = ctx.measureText(trimmed);
           const textWidth = metrics.width;
           const ascent = metrics.actualBoundingBoxAscent ?? nameFontSize;
-          const descent = metrics.actualBoundingBoxDescent ?? nameFontSize * 0.25;
+          const descent =
+            metrics.actualBoundingBoxDescent ?? nameFontSize * 0.25;
           const textHeight = ascent + descent;
           const paddingX = Math.max(6, deviceRadius * 0.25);
           const paddingY = Math.max(3, nameFontSize * 0.35);
@@ -5126,24 +5675,45 @@ export class TacticsStateService {
     ctx: CanvasRenderingContext2D,
     _state: RenderState
   ): void {
-    if (this.selectedTool() !== 'eraser') {
+    if (this.selectedTool() === 'eraser') {
+      const preview = this.eraserPreview();
+      if (!preview) {
+        return;
+      }
+      const radius = this.eraserRadius();
+      ctx.save();
+      ctx.setLineDash([1.8, 1.6]);
+      ctx.lineWidth = 0.6;
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.8)';
+      ctx.fillStyle = 'rgba(148, 163, 184, 0.12)';
+      ctx.beginPath();
+      ctx.arc(preview.x, preview.y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
       return;
     }
-    const preview = this.eraserPreview();
-    if (!preview) {
-      return;
+
+    if (this.selectedTool() === 'select') {
+      const marquee = this.marqueeSelection();
+      if (!marquee) {
+        return;
+      }
+      const x1 = Math.min(marquee.origin.x, marquee.current.x);
+      const y1 = Math.min(marquee.origin.y, marquee.current.y);
+      const x2 = Math.max(marquee.origin.x, marquee.current.x);
+      const y2 = Math.max(marquee.origin.y, marquee.current.y);
+      ctx.save();
+      ctx.setLineDash([3, 2]);
+      ctx.lineWidth = 0.7;
+      ctx.strokeStyle = 'rgba(59, 130, 246, 0.7)';
+      ctx.fillStyle = 'rgba(59, 130, 246, 0.12)';
+      ctx.beginPath();
+      ctx.rect(x1, y1, x2 - x1, y2 - y1);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
     }
-    const radius = this.eraserRadius();
-    ctx.save();
-    ctx.setLineDash([1.8, 1.6]);
-    ctx.lineWidth = 0.6;
-    ctx.strokeStyle = 'rgba(148, 163, 184, 0.8)';
-    ctx.fillStyle = 'rgba(148, 163, 184, 0.12)';
-    ctx.beginPath();
-    ctx.arc(preview.x, preview.y, radius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
   }
 
   private drawArrowHead(
@@ -5206,6 +5776,10 @@ export class TacticsStateService {
     return Math.min(width, height) * JUGG_CORNER_RATIO;
   }
 
+  private getTokenScaleFor(tokenId: string): number {
+    return this.tokenScaleOverrides()[tokenId] ?? this.tokenScale();
+  }
+
   private getTokenRadius(scale = this.tokenScale()): number {
     return TOKEN_BASE_RADIUS * scale;
   }
@@ -5231,8 +5805,9 @@ export class TacticsStateService {
   }
 
   private hasQuickPlayersInScene(): boolean {
-    return this.sceneSnapshot()
-      .scene.tokens.some((token) => token.teamId === QUICK_TEAM_ID);
+    return this.sceneSnapshot().scene.tokens.some(
+      (token) => token.teamId === QUICK_TEAM_ID
+    );
   }
 
   private getTokenFillColor(token: Token): string {
@@ -5249,9 +5824,10 @@ export class TacticsStateService {
     if (!playerId) {
       return '?';
     }
-    const player = [...this.leftTeam().players, ...this.rightTeam().players].find(
-      (p) => p.id === playerId
-    );
+    const player = [
+      ...this.leftTeam().players,
+      ...this.rightTeam().players,
+    ].find((p) => p.id === playerId);
     return player?.name.charAt(0) ?? '?';
   }
 
@@ -5289,9 +5865,10 @@ export class TacticsStateService {
     if (quick) {
       return quick.name;
     }
-    const player = [...this.leftTeam().players, ...this.rightTeam().players].find(
-      (p) => p.id === playerId
-    );
+    const player = [
+      ...this.leftTeam().players,
+      ...this.rightTeam().players,
+    ].find((p) => p.id === playerId);
     return player?.name ?? null;
   }
 

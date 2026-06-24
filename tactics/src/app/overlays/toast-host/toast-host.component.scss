@@ -47,3 +47,71 @@
   background: rgba(15, 23, 42, 0.08);
   border-color: rgba(15, 23, 42, 0.2);
 }
+
+:host-context(.theme-dark) .toast {
+  border-color: rgba(42, 50, 63, 0.75);
+  background: #161b23;
+  color: #e7ebf4;
+  box-shadow: 0 24px 48px rgba(6, 12, 22, 0.55);
+}
+
+:host-context(.theme-dark) .toast--warning {
+  border-color: rgba(217, 119, 6, 0.6);
+  background: linear-gradient(
+    180deg,
+    rgba(250, 204, 21, 0.22) 0%,
+    rgba(217, 119, 6, 0.3) 100%
+  );
+  color: #fef3c7;
+}
+
+:host-context(.theme-dark) .toast--error {
+  border-color: rgba(220, 38, 38, 0.65);
+  background: linear-gradient(
+    180deg,
+    rgba(248, 113, 113, 0.24) 0%,
+    rgba(220, 38, 38, 0.34) 100%
+  );
+  color: #fee2e2;
+}
+
+:host-context(.theme-dark) .toast__actions button {
+  border-color: rgba(42, 50, 63, 0.75);
+  background: rgba(29, 36, 49, 0.92);
+  color: #e7ebf4;
+  box-shadow: 0 14px 24px rgba(6, 12, 22, 0.5);
+}
+
+:host-context(.theme-dark) .toast__actions button:hover {
+  background: rgba(59, 78, 110, 0.92);
+  border-color: rgba(153, 174, 204, 0.7);
+}
+
+@media (max-width: 720px) {
+  .toast {
+    left: 50%;
+    right: auto;
+    bottom: clamp(18px, 8vh, 36px);
+    transform: translateX(-50%);
+    width: min(92vw, 420px);
+    padding: 0.85rem 1.1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .toast {
+    width: min(94vw, 360px);
+    font-size: 0.88rem;
+    gap: 10px;
+  }
+
+  .toast__actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .toast__actions button {
+    flex: 1 1 auto;
+    min-width: 120px;
+  }
+}

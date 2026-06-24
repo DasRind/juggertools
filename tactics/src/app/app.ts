@@ -21,6 +21,7 @@ import { TacticsStateService } from './core/tactics-state.service';
   host: {
     class: 'app-shell',
     '[class.theme-dark]': 'state.isDarkMode()',
+    '[class.theme-light]': '!state.isDarkMode()',
   },
   imports: [
     SiteHeaderComponent,

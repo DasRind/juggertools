@@ -3,7 +3,8 @@
   min-height: 100vh;
   background: linear-gradient(160deg, #041217 0%, #0d2530 100%);
   color: #e2e8f0;
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    sans-serif;
   padding: 2rem;
   box-sizing: border-box;
 }
@@ -195,12 +196,20 @@
 }
 
 .toast--warning {
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.9), rgba(251, 191, 36, 0.85));
+  background: linear-gradient(
+    135deg,
+    rgba(245, 158, 11, 0.9),
+    rgba(251, 191, 36, 0.85)
+  );
   color: #1f1400;
 }
 
 .toast--error {
-  background: linear-gradient(135deg, rgba(248, 113, 113, 0.92), rgba(239, 68, 68, 0.88));
+  background: linear-gradient(
+    135deg,
+    rgba(248, 113, 113, 0.92),
+    rgba(239, 68, 68, 0.88)
+  );
   color: #190505;
 }
 
